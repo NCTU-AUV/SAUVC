@@ -12,6 +12,7 @@
 #
 #   make sim_up      額外啟動模擬容器
 #   make sim         模擬全鏈路：Gazebo + control(sim) + autonomy
+#                    ARENA=finals|qualification  SEED=<int>  HEADLESS=true  SOFTGL=1
 #
 # 環境設定全部來自 .env，不要在這裡寫死。
 # -----------------------------------------------------------------------------
@@ -129,6 +130,18 @@ SIM ?= false
 # HEADLESS=true 時 Gazebo 只跑 server，不開 GUI
 HEADLESS ?= false
 
+# 模擬場地：finals（決賽，道具位置與 drum 順序每次隨機）或
+# qualification（資格賽，只有起始線隨機）。
+ARENA ?= finals
+# 亂數種子。給定時佈局完全可重現 —— 除錯時務必給，否則重啟一次道具就跑掉，
+# 前一次的 bag 也對不起來。不給則每次都不同（測 BT 泛用性用）。
+SEED ?=
+
+SIM_LAUNCH_ARGS := arena:=$(ARENA)
+ifneq ($(strip $(SEED)),)
+SIM_LAUNCH_ARGS += seed:=$(SEED)
+endif
+
 launch: launch_control launch_autonomy
 	@echo "節點啟動中，用 make status 查看"
 
@@ -175,12 +188,13 @@ xhost_grant:
 	@if [ "$(HEADLESS)" != "true" ] && [ -n "$(DISPLAY)" ] && command -v xhost >/dev/null 2>&1; then 		xhost +local:root >/dev/null 2>&1 && echo "==> 已授權容器存取 X server（xhost +local:root）" 		|| echo "==> xhost 授權失敗，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	elif [ "$(HEADLESS)" != "true" ] && ! command -v xhost >/dev/null 2>&1; then 		echo "==> 找不到 xhost，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	fi
 
 sim_launch: sim_up xhost_grant
-	@echo "==> 啟動 Gazebo（headless=$(HEADLESS)）"
+	@echo "==> 啟動 Gazebo（arena=$(ARENA) seed=$(if $(strip $(SEED)),$(SEED),隨機) headless=$(HEADLESS)）"
 	@$(COMPOSE) exec -T sim /bin/bash -lc "pkill -f '[r]os2 launch' || true; sleep 1" 2>/dev/null || true
 	$(COMPOSE) exec -T -d sim /bin/bash -lc "\
 		source /opt/ros/humble/setup.bash && source /root/sim_ws/install/setup.bash && \
 		exec ros2 launch bringup orca_ros_gz_bridge_launch.py \
-			namespace:=$(ORCA_NAMESPACE) headless:=$(HEADLESS) > /tmp/sim.log 2>&1"
+			namespace:=$(ORCA_NAMESPACE) headless:=$(HEADLESS) \
+			$(SIM_LAUNCH_ARGS) > /tmp/sim.log 2>&1"
 	@sleep 8
 	@$(MAKE) --no-print-directory launch_control SIM=true
 	@$(MAKE) --no-print-directory launch_autonomy
