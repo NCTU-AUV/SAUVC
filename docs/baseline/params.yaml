@@ -1,0 +1,196 @@
+# ===== /orca_auv/bottom_camera_pid_bridge_node =====
+/orca_auv/bottom_camera_pid_bridge_node:
+  ros__parameters:
+    max_force_x_N: 10.0
+    max_force_y_N: 10.0
+    max_yaw_torque_Nm: 5.0
+    output_topic: control/wrench_sources/bottom_camera
+    use_sim_time: false
+    x_manipulated_topic: control/pid/bottom_camera/x/force_world_N
+    y_manipulated_topic: control/pid/bottom_camera/y/force_world_N
+    yaw_manipulated_topic: control/pid/bottom_camera/yaw/torque_Nm
+    yaw_topic: state/bottom_camera/yaw_rad
+
+# ===== /orca_auv/depth_pid_controller_node =====
+/orca_auv/depth_pid_controller_node:
+  ros__parameters:
+    controller_loop_timer_period_s: 0.01
+    derivative_gain: 12.0
+    derivative_smoothing_factor: 0.0
+    integral_gain: 3.0
+    proportional_gain: 40.0
+    use_sim_time: false
+
+# ===== /orca_auv/float32_to_float64_converter_node =====
+/orca_auv/float32_to_float64_converter_node:
+  ros__parameters:
+    use_sim_time: false
+
+# ===== /orca_auv/gui_node =====
+/orca_auv/gui_node:
+  ros__parameters:
+    use_sim_time: false
+
+# ===== /orca_auv/imu_to_orientation_node =====
+/orca_auv/imu_to_orientation_node:
+  ros__parameters:
+    use_sim_time: false
+
+# ===== /orca_auv/lk_total_transform_node =====
+/orca_auv/lk_total_transform_node:
+  ros__parameters:
+    auto_scale_min_line_length: true
+    axis_angle_tolerance_deg: 25.0
+    block_size: 7
+    blur_kernel_size: 5
+    camera_info_topic: camera/bottom/camera_info
+    canny_threshold1: 60.0
+    canny_threshold2: 160.0
+    criteria_count: 20
+    criteria_eps: 0.03
+    debug_image_topic: camera/bottom/debug/tile_lines
+    flip_image_x: false
+    flip_image_y: false
+    grid_yaw_anchor_min_confidence: 0.75
+    grid_yaw_anchor_min_matches: 4
+    grid_yaw_correction_gain: 0.1
+    grid_yaw_correction_gate_rad: 0.25
+    grid_yaw_correction_max_rad: 0.015
+    grid_yaw_deadband_rad: 0.005
+    hough_threshold: 45
+    image_to_body_yaw_deg: 90.0
+    image_topic: camera/bottom/image_raw
+    line_merge_distance_px: 8.0
+    max_corners: 500
+    max_level: 2
+    max_line_gap_px: 12.0
+    max_track_error: 50.0
+    max_visual_only_frames: 3
+    min_confirmed_line_matches: 2
+    min_confirmed_tracks_for_stride: 2
+    min_distance: 7.0
+    min_line_length_px: 45.0
+    min_line_length_reference_width_px: 320.0
+    min_lines_per_axis: 1
+    min_tracking_confidence_for_stride: 0.5
+    min_visual_inliers: 10
+    min_visual_tracked_points: 30
+    motion_outlier_threshold_px: 12.0
+    output_scale_topic: state/bottom_camera/scale
+    output_topic: camera/bottom/pose_px
+    output_topic_raw: camera/bottom/pose_raw_px
+    output_x_topic: control/pid/bottom_camera/x/feedback_px
+    output_y_topic: control/pid/bottom_camera/y/feedback_px
+    output_yaw_topic: state/bottom_camera/yaw_rad
+    publish_debug_image: false
+    publish_raw_output: true
+    quality_level: 0.01
+    ransac_reproj_threshold_px: 3.0
+    recovery_detection_frames: 5
+    reinit_if_fail: true
+    resize_width_px: 320
+    rotation_center_mode: image_center
+    tile_detection_stride: 2
+    track_angle_match_tolerance_deg: 12.0
+    track_confirm_frames: 3
+    track_match_distance_px: 25.0
+    track_max_missed_frames: 5
+    use_dynamic_grid_angles: true
+    use_sim_time: false
+    use_visual_feature_tracking: true
+    win_size: 21
+    yaw_line_blend_max_weight: 0.85
+    yaw_line_blend_min_weight: 0.25
+    yaw_line_matches_full_confidence: 6
+    yaw_visual_inliers_full_confidence: 80
+
+# ===== /orca_auv/output_sink_force_to_output_wrench_node =====
+/orca_auv/output_sink_force_to_output_wrench_node:
+  ros__parameters:
+    depth_force_bias_N: 10.0
+    use_sim_time: false
+    use_sink_force_direction: false
+
+# ===== /orca_auv/supervisor_node =====
+/orca_auv/supervisor_node:
+  ros__parameters:
+    auto_flash_stm32_on_startup: false
+    bottom_camera_timeout_s: 1.0
+    depth_sensor_timeout_s: 1.0
+    require_not_killed: false
+    require_thrusters_enabled: false
+    stm32_flash_service: /flash_stm32
+    stm32_flash_service_timeout_s: 15.0
+    use_sim_time: false
+
+# ===== /orca_auv/waypoint_target_publisher =====
+/orca_auv/waypoint_target_publisher:
+  ros__parameters:
+    action_name: control/targets/move_to_point
+    default_speed_px_s: 20.0
+    done_topic: control/targets/done
+    initial_x_px: 0.0
+    initial_y_px: 0.0
+    publish_initial_target: true
+    publish_period: 0.1
+    target_topic: control/targets/bottom_camera_point_px
+    target_x_topic: control/pid/bottom_camera/x/reference_px
+    target_y_topic: control/pid/bottom_camera/y/reference_px
+    use_sim_time: false
+
+# ===== /orca_auv/wrench_sum_node =====
+/orca_auv/wrench_sum_node:
+  ros__parameters:
+    input_topics:
+    - control/wrench_sources/gui
+    - control/wrench_sources/bottom_camera
+    - control/wrench_sources/depth
+    - control/wrench_sources/decision
+    output_topic: control/wrench_command
+    publish_rate: 30.0
+    source_timeout_s: 0.5
+    use_sim_time: false
+
+# ===== /orca_auv/wrench_to_individual_thrusters_output_forces_node =====
+/orca_auv/wrench_to_individual_thrusters_output_forces_node:
+  ros__parameters:
+    use_sim_time: false
+
+# ===== /orca_auv/x_coordinate_pid_controller_node =====
+/orca_auv/x_coordinate_pid_controller_node:
+  ros__parameters:
+    controller_loop_timer_period_s: 0.01
+    derivative_gain: 0.001
+    derivative_smoothing_factor: 0.2
+    integral_gain: 1.0e-05
+    proportional_gain: 0.03
+    use_sim_time: false
+
+# ===== /orca_auv/yaw_angle_pid_controller_node =====
+/orca_auv/yaw_angle_pid_controller_node:
+  ros__parameters:
+    controller_loop_timer_period_s: 0.01
+    derivative_gain: 0.02
+    derivative_smoothing_factor: 0.2
+    integral_gain: 0.0
+    proportional_gain: 0.5
+    use_sim_time: false
+
+# ===== /orca_auv/yaw_reference_unwrapper_node =====
+/orca_auv/yaw_reference_unwrapper_node:
+  ros__parameters:
+    feedback_topic: state/bottom_camera/yaw_rad
+    output_topic: control/pid/bottom_camera/yaw/reference_rad
+    target_topic: control/targets/bottom_camera/yaw_rad
+    use_sim_time: false
+
+# ===== /orca_auv/y_coordinate_pid_controller_node =====
+/orca_auv/y_coordinate_pid_controller_node:
+  ros__parameters:
+    controller_loop_timer_period_s: 0.01
+    derivative_gain: 0.001
+    derivative_smoothing_factor: 0.2
+    integral_gain: 1.0e-05
+    proportional_gain: 0.03
+    use_sim_time: false
+

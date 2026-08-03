@@ -1,0 +1,34 @@
+# =============================================================================
+# Jetson (aarch64) 專屬疊加
+# =============================================================================
+# 用法（Makefile 會依 uname -m 自動加上）：
+#   docker compose -f docker-compose.yml -f docker-compose.jetson.yml up -d
+#
+# 這裡的掛載對應 isaac_ros_common/scripts/run_dev.sh 在 aarch64 分支做的事。
+# 沒有這些，Isaac ROS 的 GPU / VPI / 多媒體 API 在容器裡都用不了。
+# -----------------------------------------------------------------------------
+
+services:
+
+  control:
+    runtime: nvidia
+
+  autonomy:
+    runtime: nvidia
+    environment:
+      # Jetson 上要同時給 GPU 與 PVA（Programmable Vision Accelerator）
+      NVIDIA_VISIBLE_DEVICES: nvidia.com/gpu=all,nvidia.com/pva=all
+    # --pid=host：Isaac ROS 的部分工具（tegrastats、jtop）需要看到 host 的
+    # process 命名空間。
+    pid: host
+    volumes:
+      - /usr/bin/tegrastats:/usr/bin/tegrastats
+      - /usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra
+      - /usr/src/jetson_multimedia_api:/usr/src/jetson_multimedia_api
+      - /usr/share/vpi3:/usr/share/vpi3
+      - /dev/input:/dev/input
+      - /tmp/:/tmp/
+
+  # sim 不在這裡處理：Gazebo 在 Jetson 上不是支援的流程（載具上不跑模擬，
+  # 而且 Orin NX 沒有多餘算力同時跑 Gazebo 與感知）。要在 Jetson 上跑模擬
+  # 請自行加 runtime: nvidia。

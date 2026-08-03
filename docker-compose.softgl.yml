@@ -1,0 +1,48 @@
+# =============================================================================
+# 軟體算繪退路 —— 給沒有可用 GPU passthrough 的機器
+# =============================================================================
+# 用法：
+#   make sim SOFTGL=1
+#
+# 什麼時候需要：Gazebo 的世界裡有相機感測器，所以就算用 headless（-s）也需要
+# 算繪。GPU passthrough 壞掉時 Ogre 會這樣死：
+#
+#   eglInitialize failed for device EGL_EXT_device_drm ... /dev/dri/cardN
+#   OpenGL 3.3 is not supported. Please update your graphics card drivers.
+#   Segmentation fault
+#
+# 世界會開起來、模型也會 spawn，然後整個 gazebo 程序死掉 —— 表現出來是
+# 感測器 topic 完全沒有資料、supervisor 停在
+# FAULT / "Depth sensor data has not been received"，很難聯想到是算繪問題。
+#
+# GPU passthrough 壞掉最常見的原因是 host 沒跑 nvidia-persistenced
+# （容器會直接以 /run/nvidia-persistenced/socket 不存在起不來）。
+# `make doctor` 會檢查。
+#
+# 代價：llvmpipe 算繪，相機幀率會很低。驗證控制鏈路夠用，
+# 要測感知（YOLO）請修好 GPU passthrough。
+# -----------------------------------------------------------------------------
+
+services:
+
+  # autonomy 也要一併不要 GPU：只要有任何一個 service 帶著 gpus / runtime: nvidia，
+  # 在 passthrough 壞掉的機器上整個 compose 都會起不來。
+  # 代價是 TensorRT 推論不能跑，但決策層（BehaviorTree）本身不需要 GPU，
+  # 驗證跨堆疊控制鏈路仍然可行。
+  autonomy: {}
+
+  sim:
+    environment:
+      # 讓 Mesa 走軟體光柵化（swrast/llvmpipe，支援 OpenGL 4.5，滿足 Ogre 的 3.3 需求）。
+      # 注意驅動檔名是 swrast_dri.so，不是 llvmpipe_dri.so —— 填錯會出現
+      # "MESA-LOADER: failed to open llvmpipe" 然後退回硬體路徑再度失敗。
+      LIBGL_ALWAYS_SOFTWARE: 1
+      # 不要讓 EGL 去挑 NVIDIA 的 device，否則還是會走到壞掉的那條路
+      __GLX_VENDOR_LIBRARY_NAME: mesa
+      MESA_LOADER_DRIVER_OVERRIDE: swrast
+    # 這裡刻意不掛 /dev/dri（base compose 也沒有）：Ogre 的 EGL 只要看得到
+    # DRM device 就會優先用它，看得到就會走回壞掉的那條路。
+    #
+    # 注意 compose 的 devices 是「合併」不是「覆寫」，寫 devices: [] 清不掉
+    # 上層定義的裝置 —— 所以 /dev/dri 是放在平台疊加檔裡，而本檔案是
+    # **取代**平台疊加檔而非疊在上面。

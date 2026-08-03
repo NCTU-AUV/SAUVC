@@ -1,0 +1,32 @@
+# =============================================================================
+# x86_64 開發機專屬疊加
+# =============================================================================
+# 用法（Makefile 會依 uname -m 自動加上）：
+#   docker compose -f docker-compose.yml -f docker-compose.x86.yml up -d
+#
+# GPU 存取在 x86 與 Jetson 上寫法不同，而且互斥：
+#   x86    —— `gpus: all`（nvidia-container-toolkit 的標準寫法）
+#   Jetson —— `runtime: nvidia`（JetPack 上 --gpus all 不работает）
+# 兩者同時給會衝突，所以拆成兩個疊加檔，不要合併。
+#
+# 沒有 GPU 的後果不是「跑比較慢」而是直接掛掉：Ogre 建不出 render context
+# （eglInitialize failed → OpenGL 3.3 is not supported → segfault），
+# 世界會開起來、模型也會 spawn，然後整個 gazebo 程序死掉。表現出來是
+# supervisor 一直停在 FAULT / "Depth sensor data has not been received"，
+# 很難聯想到是算繪問題。
+#
+# 前置條件：host 要跑著 nvidia-persistenced，否則 nvidia-container-toolkit
+# 會找不到 /run/nvidia-persistenced/socket 而讓容器整個起不來：
+#   sudo systemctl start nvidia-persistenced
+# `make doctor` 會檢查這一項。
+# -----------------------------------------------------------------------------
+
+services:
+
+  autonomy:
+    gpus: all      # TensorRT 推論需要
+
+  sim:
+    gpus: all      # Gazebo 算繪需要
+    devices:
+      - /dev/dri:/dev/dri

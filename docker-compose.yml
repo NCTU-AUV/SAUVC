@@ -1,0 +1,146 @@
+# =============================================================================
+# Orca AUV —— 全系統
+# =============================================================================
+# 一次拉起載具上的兩個堆疊：
+#
+#   control   —— 載具控制（SAUVC-RPI）：PID、wrench 匯流排、推力分配
+#   autonomy  —— 感知與決策（SAUVC-JETSON）：YOLOv8 + BehaviorTree
+#
+# 兩者跑在同一塊 Jetson Orin NX 上但維持獨立容器，理由：base image 無法調和
+# （CUDA devel + Isaac ROS 全家桶 vs 乾淨的 ros:humble）；改動頻率差距極大
+# （控制堆疊天天調參，Isaac 映像半年不動）；故障隔離（感知 OOM / GPU 異常
+# 不該拖垮推進器控制）。
+#
+# 模擬是額外的 profile，實機不會啟動：
+#   docker compose --profile sim up -d
+#
+# 在 Jetson 上要疊 Jetson 專屬的掛載：
+#   docker compose -f docker-compose.yml -f docker-compose.jetson.yml up -d
+# （Makefile 會依 uname -m 自動判斷）
+#
+# 所有環境設定來自 .env，不要在這裡寫死。
+# -----------------------------------------------------------------------------
+
+x-ros-env: &ros-env
+  ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+  ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+  RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+  # 預設值刻意也設成 UDPv4：就算有人忘了帶 .env，也不會掉進
+  # 「跨容器靜默失聯」那個最難查的失敗模式。見 .env 的說明。
+  FASTDDS_BUILTIN_TRANSPORTS: ${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}
+  ORCA_NAMESPACE: ${ORCA_NAMESPACE:-orca_auv}
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # 載具控制堆疊
+  # ---------------------------------------------------------------------------
+  control:
+    container_name: orca-control
+    image: ${ORCA_CONTROL_IMAGE:-dianyueguo/orca-auv-rpi-ros2-image:latest}
+    build:
+      context: ./SAUVC-RPI
+      dockerfile: Dockerfile
+    network_mode: host
+    privileged: true          # 存取 STM32 序列埠與 ST-Link
+    stdin_open: true
+    tty: true
+    environment:
+      <<: *ros-env
+      ORCA_STM32_PORT: ${ORCA_STM32_PORT:-/dev/ttyUSB0}
+      ORCA_BAG_ROOT: /root/bags
+      DISPLAY: ${HOST_DISPLAY:-:0}
+      XAUTHORITY: ${XAUTHORITY:-/tmp/.Xauthority}
+    volumes:
+      - /dev:/dev
+      - ./SAUVC-RPI/rpi_ros2_ws:/root/rpi_ros2_ws
+      # build / install / log 用 named volume，不要落在 bind mount 裡：
+      # host 上跑過的 colcon build 會留下寫死 host 路徑的 CMakeCache，
+      # 讓容器內 build 直接失敗，而且因為這些目錄被 gitignore，沒人查得出原因。
+      - control_build:/root/rpi_ros2_ws/build
+      - control_install:/root/rpi_ros2_ws/install
+      - control_log:/root/rpi_ros2_ws/log
+      - ./SAUVC-RPI/SAUVC-STM32/build:/root/rpi_ros2_ws/stm32_binary
+      - ${ORCA_BAG_DIR:-./bags}:/root/bags
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    working_dir: /root
+    command: ["/bin/bash", "-lc", "tail -f /dev/null"]
+
+  # ---------------------------------------------------------------------------
+  # 感知與決策堆疊
+  #
+  # 沒有 build: —— Isaac ROS 映像是由 isaac_ros_common 的 build_image_layers.sh
+  # 分層組出來的，不能用 compose build。取得方式見 .env 的 ORCA_AUTONOMY_IMAGE。
+  # ---------------------------------------------------------------------------
+  autonomy:
+    container_name: orca-autonomy
+    image: ${ORCA_AUTONOMY_IMAGE:-isaac_ros_dev-x86_64:latest}
+    network_mode: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    environment:
+      <<: *ros-env
+      ISAAC_ROS_WS: /workspaces/isaac_ros-dev
+      DISPLAY: ${HOST_DISPLAY:-:0}
+      XAUTHORITY: ${XAUTHORITY:-/tmp/.Xauthority}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+    volumes:
+      - /dev:/dev
+      - ./SAUVC-JETSON:/workspaces/isaac_ros-dev/src
+      - autonomy_build:/workspaces/isaac_ros-dev/build
+      - autonomy_install:/workspaces/isaac_ros-dev/install
+      - autonomy_log:/workspaces/isaac_ros-dev/log
+      # TensorRT engine 快取。沒有這個的話，每次容器重建都要從 .onnx 重新
+      # 建一次 engine，在 Orin NX 上是好幾分鐘到十幾分鐘。
+      - autonomy_trt_cache:/workspaces/isaac_ros-dev/trt_cache
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+    working_dir: /workspaces/isaac_ros-dev
+    command: ["/bin/bash", "-lc", "tail -f /dev/null"]
+
+  # ---------------------------------------------------------------------------
+  # 模擬（profile: sim，實機不啟動）
+  # ---------------------------------------------------------------------------
+  sim:
+    container_name: orca-sim
+    image: ${ORCA_SIM_IMAGE:-orca-auv-gazebo-simulation-image:latest}
+    build:
+      context: ./SAUVC-Simulation
+      dockerfile: Dockerfile
+    profiles: ["sim"]
+    network_mode: host
+    ipc: host
+    stdin_open: true
+    tty: true
+    environment:
+      <<: *ros-env
+      DISPLAY: ${HOST_DISPLAY:-:0}
+      QT_X11_NO_MITSHM: 1
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: graphics,utility,compute,display
+      __GLX_VENDOR_LIBRARY_NAME: nvidia
+    volumes:
+      - ./SAUVC-Simulation/sim_ws:/root/sim_ws
+      - sim_build:/root/sim_ws/build
+      - sim_install:/root/sim_ws/install
+      - sim_log:/root/sim_ws/log
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    # /dev/dri 與 GPU 由平台疊加檔提供（docker-compose.x86.yml /
+    # docker-compose.jetson.yml），base 不預設任何硬體 —— 這樣
+    # docker-compose.softgl.yml 取代平台疊加檔時才會真的沒有硬體可挑。
+    working_dir: /root
+    command: ["/bin/bash", "-lc", "tail -f /dev/null"]
+
+volumes:
+  control_build:
+  control_install:
+  control_log:
+  autonomy_build:
+  autonomy_install:
+  autonomy_log:
+  autonomy_trt_cache:
+  sim_build:
+  sim_install:
+  sim_log:

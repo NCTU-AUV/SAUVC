@@ -1,0 +1,9 @@
+[submodule "SAUVC-JETSON"]
+	path = SAUVC-JETSON
+	url = https://github.com/NCTU-AUV/SAUVC-JETSON.git
+[submodule "SAUVC-RPI"]
+	path = SAUVC-RPI
+	url = https://github.com/NCTU-AUV/SAUVC-RPI.git
+[submodule "SAUVC-Simulation"]
+	path = SAUVC-Simulation
+	url = https://github.com/NCTU-AUV/SAUVC-Simulation.git

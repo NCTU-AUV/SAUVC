@@ -1,0 +1,13 @@
+# Bag 錄製輸出
+bags/
+
+# 重構期間的節點／topic 快照與 param dump
+snapshots/
+
+# 本機覆蓋（不進版控，用來覆寫 .env 的值）
+.env.local
+
+.vscode/
+*.pyc
+__pycache__/
+*.DS_Store
