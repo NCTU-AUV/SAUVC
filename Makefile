@@ -13,6 +13,7 @@
 #   make sim_up      額外啟動模擬容器
 #   make sim         模擬全鏈路：Gazebo + control(sim) + autonomy
 #                    ARENA=finals|qualification  SEED=<int>  HEADLESS=true  SOFTGL=1
+#                    DRUM_STYLE=drum|tub|random  RANDOMIZE_WATER=true
 #
 # 環境設定全部來自 .env，不要在這裡寫死。
 # -----------------------------------------------------------------------------
@@ -137,7 +138,13 @@ ARENA ?= finals
 # 前一次的 bag 也對不起來。不給則每次都不同（測 BT 泛用性用）。
 SEED ?=
 
-SIM_LAUNCH_ARGS := arena:=$(ARENA)
+# 目標容器形狀：drum（rulebook 文字的圓桶）/ tub（比賽照片的方形塑膠箱）/ random。
+# 主辦單位兩種都用過，random 讓一次跑動涵蓋兩種外觀。
+DRUM_STYLE ?= random
+# 讓水質、能見度與曝光隨時間變化，而不是固定一種水況。
+RANDOMIZE_WATER ?= false
+
+SIM_LAUNCH_ARGS := arena:=$(ARENA) drum_style:=$(DRUM_STYLE) randomize_water:=$(RANDOMIZE_WATER)
 ifneq ($(strip $(SEED)),)
 SIM_LAUNCH_ARGS += seed:=$(SEED)
 endif
@@ -188,7 +195,7 @@ xhost_grant:
 	@if [ "$(HEADLESS)" != "true" ] && [ -n "$(DISPLAY)" ] && command -v xhost >/dev/null 2>&1; then 		xhost +local:root >/dev/null 2>&1 && echo "==> 已授權容器存取 X server（xhost +local:root）" 		|| echo "==> xhost 授權失敗，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	elif [ "$(HEADLESS)" != "true" ] && ! command -v xhost >/dev/null 2>&1; then 		echo "==> 找不到 xhost，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	fi
 
 sim_launch: sim_up xhost_grant
-	@echo "==> 啟動 Gazebo（arena=$(ARENA) seed=$(if $(strip $(SEED)),$(SEED),隨機) headless=$(HEADLESS)）"
+	@echo "==> 啟動 Gazebo（arena=$(ARENA) seed=$(if $(strip $(SEED)),$(SEED),隨機) headless=$(HEADLESS) drum_style=$(DRUM_STYLE) randomize_water=$(RANDOMIZE_WATER)）"
 	@$(COMPOSE) exec -T sim /bin/bash -lc "pkill -f '[r]os2 launch' || true; sleep 1" 2>/dev/null || true
 	$(COMPOSE) exec -T -d sim /bin/bash -lc "\
 		source /opt/ros/humble/setup.bash && source /root/sim_ws/install/setup.bash && \
