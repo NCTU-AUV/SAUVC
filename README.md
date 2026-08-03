@@ -75,8 +75,13 @@ make pull_autonomy
 ```shell
 make sim                 # Gazebo + control(sim) + autonomy，一次到位
 make sim SOFTGL=1        # 這台機器的 GPU passthrough 壞掉時
-make sim HEADLESS=true   # 不開 Gazebo GUI
+make sim HEADLESS=true   # 不開 Gazebo GUI（沒有 X11 的環境用這個）
 ```
+
+`make sim` 會自己把三個容器都拉起來，並在 GUI 模式下自動下
+`xhost +local:root` 讓容器連得上 X server。少了那道授權，Gazebo 的 Qt 會以
+`Authorization required` 失敗然後整個程序死掉，表現出來卻只是「感測器 topic
+沒有資料」。
 
 ### 出問題先跑這個
 

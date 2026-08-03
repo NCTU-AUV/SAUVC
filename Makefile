@@ -83,7 +83,7 @@ STOP_AUTONOMY := \
 	pkill -9 -f '[i]saac_ros-dev/install' || true
 
 .PHONY: all up down build build_images launch launch_control launch_autonomy stop status \
-        sim_up sim sim_launch logs_control logs_autonomy clean doctor \
+        sim_up sim sim_launch xhost_grant logs_control logs_autonomy clean doctor \
         pull_autonomy submodules
 
 all: up build launch status
@@ -93,9 +93,9 @@ all: up build launch status
 submodules:
 	git submodule update --init --recursive
 
+# 冪等：容器已在跑時幾乎是 no-op，所以可以安心當成其他 target 的前置條件。
 up:
-	@echo "==> 啟動容器（arch=$(ARCH)）"
-	$(COMPOSE) up -d --no-build control autonomy
+	@$(COMPOSE) up -d --no-build control autonomy
 
 down:
 	$(COMPOSE) --profile sim down
@@ -126,18 +126,20 @@ build:
 
 # SIM=true 時 control 堆疊跑模擬模式（跳過硬體節點）
 SIM ?= false
+# HEADLESS=true 時 Gazebo 只跑 server，不開 GUI
+HEADLESS ?= false
 
 launch: launch_control launch_autonomy
 	@echo "節點啟動中，用 make status 查看"
 
-launch_control:
+launch_control: up
 	@echo "==> 啟動 control 堆疊（sim=$(SIM)）"
 	@$(COMPOSE) exec -T control /bin/bash -lc "$(STOP_CONTROL)" >/dev/null 2>&1 || true
 	$(COMPOSE) exec -T -d control /bin/bash -lc "\
 		$(CONTROL_SETUP) \
 		exec ros2 launch orca_bringup bringup.launch.py sim:=$(SIM) > /tmp/control.log 2>&1"
 
-launch_autonomy:
+launch_autonomy: up
 	@echo "==> 啟動 autonomy 堆疊"
 	@$(COMPOSE) exec -T autonomy /bin/bash -lc "$(STOP_AUTONOMY)" >/dev/null 2>&1 || true
 	@# decision_node 的 tree_xml_file 是相對路徑 config/trees.xml，
@@ -160,11 +162,20 @@ logs_autonomy:
 
 # --- 模擬 -------------------------------------------------------------------
 
-sim_up:
+# 模擬也需要 control 與 autonomy —— sim_launch 會 exec 進那兩個容器。
+sim_up: up
 	$(COMPOSE) --profile sim up -d --no-build sim
 
-sim_launch: sim_up
-	@echo "==> 啟動 Gazebo"
+# Gazebo GUI 要能連上 host 的 X server。容器以 root 執行且共用 host 的
+# X socket，所以需要一條 local:root 的授權；沒有的話 Qt 會以
+# "Authorization required, but no authorization protocol specified" 失敗，
+# 接著整個 ign gazebo 程序死掉 —— 表現出來只是「感測器 topic 沒有資料」。
+# HEADLESS=true 時不需要。
+xhost_grant:
+	@if [ "$(HEADLESS)" != "true" ] && [ -n "$(DISPLAY)" ] && command -v xhost >/dev/null 2>&1; then 		xhost +local:root >/dev/null 2>&1 && echo "==> 已授權容器存取 X server（xhost +local:root）" 		|| echo "==> xhost 授權失敗，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	elif [ "$(HEADLESS)" != "true" ] && ! command -v xhost >/dev/null 2>&1; then 		echo "==> 找不到 xhost，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	fi
+
+sim_launch: sim_up xhost_grant
+	@echo "==> 啟動 Gazebo（headless=$(HEADLESS)）"
 	@$(COMPOSE) exec -T sim /bin/bash -lc "pkill -f '[r]os2 launch' || true; sleep 1" 2>/dev/null || true
 	$(COMPOSE) exec -T -d sim /bin/bash -lc "\
 		source /opt/ros/humble/setup.bash && source /root/sim_ws/install/setup.bash && \
@@ -173,8 +184,6 @@ sim_launch: sim_up
 	@sleep 8
 	@$(MAKE) --no-print-directory launch_control SIM=true
 	@$(MAKE) --no-print-directory launch_autonomy
-
-HEADLESS ?= false
 
 sim: sim_launch
 	@sleep 15
@@ -217,6 +226,12 @@ doctor:
 		'[ -e "$(ORCA_STM32_PORT)" ] && echo "存在" || echo "不存在（實機會連不上 STM32）"' 2>/dev/null || echo "(容器未啟動)"
 	@echo "  可用的穩定路徑："
 	@ls /dev/serial/by-id/ 2>/dev/null | sed 's/^/    /' || echo "    (無 /dev/serial/by-id)"
+	@echo ""
+	@echo "--- X11（Gazebo GUI 需要）---"
+	@printf '  DISPLAY             : %s\n' "$${DISPLAY:-(未設定)}"
+	@printf '  容器可連 X server   : '
+	@$(COMPOSE) exec -T control /bin/bash -lc \
+		'command -v xdpyinfo >/dev/null 2>&1 && (xdpyinfo >/dev/null 2>&1 && echo 可以 || echo "不行（跑 xhost +local:root，或用 HEADLESS=true）") || echo "無法檢測（容器內沒有 xdpyinfo）"' 2>/dev/null || echo "(容器未啟動)"
 	@echo ""
 	@echo "--- GPU passthrough ---"
 	@printf '  nvidia-persistenced : '; systemctl is-active nvidia-persistenced 2>/dev/null || true
