@@ -156,5 +156,6 @@ ros2 service call /orca_auv/system_manager/set_mode/safe_disabled std_srvs/srv/T
 
 - [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) —— 重構計畫、決策紀錄與執行結果
 - [docs/SIMULATION_FINDINGS.md](docs/SIMULATION_FINDINGS.md) —— 三容器全鏈路實測報告
+- [docs/SIM_VISUAL_FIDELITY.md](docs/SIM_VISUAL_FIDELITY.md) —— 場景與道具依 2026 rulebook 改造、水下成像模型、量化驗證
 - [SAUVC-RPI/docs/ARCHITECTURE.md](SAUVC-RPI/docs/ARCHITECTURE.md) —— 控制堆疊架構
 - [SAUVC-JETSON/ARCHITECTURE.md](SAUVC-JETSON/ARCHITECTURE.md) —— 感知決策堆疊架構
