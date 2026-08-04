@@ -86,6 +86,16 @@ STOP_AUTONOMY := \
 	pkill -INT -f '[r]os2 launch' || true; sleep 2; \
 	pkill -9 -f '[i]saac_ros-dev/install' || true
 
+# 模擬同樣不能只殺 ros2 launch：parameter_bridge 與 ign gazebo 都是獨立子
+# 程序，父程序被殺之後它們會變成孤兒繼續跑。孤兒 bridge 的症狀特別難查 ——
+# 重跑一次 make sim 之後每個感測器 topic 就多一個發布者，頻率翻倍而數值本身
+# 看起來完全正常（實測 IMU 從 100 Hz 變成 199 Hz）。
+STOP_SIM := \
+	pkill -INT -f '[r]os2 launch' || true; sleep 2; \
+	pkill -9 -f '[p]arameter_bridge' || true; \
+	pkill -9 -f '[s]im_ws/install' || true; \
+	pkill -9 -f '[i]gn gazebo' || true
+
 .PHONY: all up down build build_sim build_images launch launch_control launch_autonomy stop status \
         sim_up sim sim_launch sim_check xhost_grant logs_control logs_autonomy logs_sim clean doctor \
         pull_autonomy submodules
@@ -203,6 +213,8 @@ stop:
 	@echo "==> 停掉所有 ROS 節點"
 	-@$(COMPOSE) exec -T control  /bin/bash -lc "$(STOP_CONTROL); ros2 daemon stop || true" 2>/dev/null
 	-@$(COMPOSE) exec -T autonomy /bin/bash -lc "$(STOP_AUTONOMY); ros2 daemon stop || true" 2>/dev/null
+	@# sim 容器多半沒在跑（實機不啟動），失敗是正常的。
+	-@$(COMPOSE) exec -T sim /bin/bash -lc "$(STOP_SIM); ros2 daemon stop || true" 2>/dev/null
 	@echo "已停止"
 
 logs_control:
@@ -230,7 +242,7 @@ xhost_grant:
 
 sim_launch: build_sim xhost_grant
 	@echo "==> 啟動 Gazebo（arena=$(ARENA) seed=$(if $(strip $(SEED)),$(SEED),隨機) headless=$(HEADLESS) drum_style=$(DRUM_STYLE) randomize_water=$(RANDOMIZE_WATER)）"
-	@$(COMPOSE) exec -T sim /bin/bash -lc "pkill -f '[r]os2 launch' || true; sleep 1" 2>/dev/null || true
+	@$(COMPOSE) exec -T sim /bin/bash -lc "$(STOP_SIM)" >/dev/null 2>&1 || true
 	$(COMPOSE) exec -T -d sim /bin/bash -lc "\
 		source /opt/ros/humble/setup.bash && source $(SIM_WS)/install/setup.bash && \
 		exec ros2 launch bringup orca_ros_gz_bridge_launch.py \
