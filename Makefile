@@ -244,18 +244,24 @@ sim_launch: build_sim xhost_grant
 # 另外偵測 —— 否則 make sim 會在空池的情況下一路跑完並回傳 0，只在容器裡
 # 的 /tmp/sim.log 留下痕跡。用感測器 topic 當就緒訊號：它同時證明 Gazebo、
 # 世界、模型與 bridge 四者都活著。
+#
+# 判斷條件必須是「真的收到一則訊息」。另外兩種寫法都會漏掉真實的失敗：
+#   ros2 topic list  —— control 與 autonomy 都訂閱這個 topic，它們活著就列得出來
+#   Publisher count  —— ros_gz_bridge 是獨立程序，Gazebo 死了它照樣掛著發布者
+# 兩者都會在「Gazebo 已經死掉」時回報就緒，正是這個檢查要防的情況。
 SIM_READY_TIMEOUT ?= 90
 sim_check:
 	@echo "==> 等待模擬就緒（最多 $(SIM_READY_TIMEOUT) 秒）"
 	@$(COMPOSE) exec -T sim /bin/bash -lc '\
 		source /opt/ros/humble/setup.bash; source $(SIM_WS)/install/setup.bash; \
 		for i in $$(seq 1 $(SIM_READY_TIMEOUT)); do \
-			if ros2 topic list 2>/dev/null | grep -qx "/$(ORCA_NAMESPACE)/sensors/imu"; then \
-				echo "    模擬已就緒（$${i}s）"; exit 0; \
+			if timeout 2 ros2 topic echo --once \
+			   /$(ORCA_NAMESPACE)/sensors/imu >/dev/null 2>&1; then \
+				echo "    模擬已就緒（約 $${i}s）"; exit 0; \
 			fi; \
-			sleep 1; \
 		done; \
-		echo "    模擬未在時限內就緒。/tmp/sim.log 末 40 行："; \
+		echo "    模擬未在時限內就緒（$(ORCA_NAMESPACE)/sensors/imu 沒有資料）。"; \
+		echo "    /tmp/sim.log 末 40 行："; \
 		tail -n 40 /tmp/sim.log 2>&1 | sed "s/^/    /"; \
 		exit 1'
 
