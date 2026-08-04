@@ -11,6 +11,7 @@
 #   make down        停掉容器
 #
 #   make sim_up      額外啟動模擬容器
+#   make build_sim   建置 sim_ws（sim 容器內；make sim 會自動先跑）
 #   make sim         模擬全鏈路：Gazebo + control(sim) + autonomy
 #                    ARENA=finals|qualification  SEED=<int>  HEADLESS=true  SOFTGL=1
 #                    DRUM_STYLE=drum|tub|random  RANDOMIZE_WATER=true
@@ -54,6 +55,7 @@ endif
 
 CONTROL_WS  := /root/rpi_ros2_ws
 AUTONOMY_WS := /workspaces/isaac_ros-dev
+SIM_WS      := /root/sim_ws
 
 CONTROL_SETUP := cd $(CONTROL_WS) && \
 	source /opt/ros/humble/setup.bash && \
@@ -84,8 +86,8 @@ STOP_AUTONOMY := \
 	pkill -INT -f '[r]os2 launch' || true; sleep 2; \
 	pkill -9 -f '[i]saac_ros-dev/install' || true
 
-.PHONY: all up down build build_images launch launch_control launch_autonomy stop status \
-        sim_up sim sim_launch xhost_grant logs_control logs_autonomy clean doctor \
+.PHONY: all up down build build_sim build_images launch launch_control launch_autonomy stop status \
+        sim_up sim sim_launch sim_check xhost_grant logs_control logs_autonomy logs_sim clean doctor \
         pull_autonomy submodules
 
 all: up build launch status
@@ -114,7 +116,7 @@ pull_autonomy:
 
 # --- workspace 建置 ---------------------------------------------------------
 
-build:
+build: up
 	@echo "==> colcon build：control"
 	$(COMPOSE) exec -T control /bin/bash -lc "\
 		cd $(CONTROL_WS) && source /opt/ros/humble/setup.bash && \
@@ -124,12 +126,37 @@ build:
 		cd $(AUTONOMY_WS) && source /opt/ros/humble/setup.bash && \
 		colcon build --symlink-install"
 
+# sim_ws 不在 build 裡：實機不會啟動 sim 容器，把它加進 build 會強迫
+# 載具上多跑一個 Gazebo 容器。改由 sim_launch 自動觸發。
+#
+# build / install / log 是 named volume（見 docker-compose.yml），映像裡
+# 沒有預先 build 過，所以 volume 第一次掛上來是空的 —— 主機上就算 build
+# 過也會被蓋掉。少了這一步，sim_launch 的 `source install/setup.bash`
+# 會失敗、整串 && 中斷，而 Gazebo 從未啟動。
+build_sim: sim_up
+	@echo "==> colcon build：sim"
+	$(COMPOSE) exec -T sim /bin/bash -lc "\
+		cd $(SIM_WS) && source /opt/ros/humble/setup.bash && \
+		colcon build --symlink-install"
+
 # --- 啟動 -------------------------------------------------------------------
 
 # SIM=true 時 control 堆疊跑模擬模式（跳過硬體節點）
 SIM ?= false
 # HEADLESS=true 時 Gazebo 只跑 server，不開 GUI
 HEADLESS ?= false
+
+# 感知管線的參數檔。裸檔名由 autonomy.launch.py 解析到 orca_perception/config，
+# 所以這裡不必寫 install space 的完整路徑。留空 = 用管線預設（實機話題）。
+PERCEPTION_CONFIG ?=
+# PERCEPTION=false 只啟動行為樹。單純除錯 BT 時才關，正常不要動 ——
+# 關掉之後世界模型會是空的，所有搜尋／接近節點都會跑到逾時。
+PERCEPTION ?= true
+
+AUTONOMY_LAUNCH_ARGS := use_perception:=$(PERCEPTION)
+ifneq ($(strip $(PERCEPTION_CONFIG)),)
+AUTONOMY_LAUNCH_ARGS += perception_config:=$(PERCEPTION_CONFIG)
+endif
 
 # 模擬場地：finals（決賽，道具位置與 drum 順序每次隨機）或
 # qualification（資格賽，只有起始線隨機）。
@@ -159,14 +186,18 @@ launch_control: up
 		$(CONTROL_SETUP) \
 		exec ros2 launch orca_bringup bringup.launch.py sim:=$(SIM) > /tmp/control.log 2>&1"
 
+# autonomy.launch.py 同時拉起感知管線與決策節點。不要改回
+# decision.launch.py —— 那個只有行為樹，沒有任何節點發布
+# /orca/perception_array，世界模型會永遠是空的。
 launch_autonomy: up
-	@echo "==> 啟動 autonomy 堆疊"
+	@echo "==> 啟動 autonomy 堆疊（perception=$(PERCEPTION)$(if $(strip $(PERCEPTION_CONFIG)), config=$(PERCEPTION_CONFIG)))"
 	@$(COMPOSE) exec -T autonomy /bin/bash -lc "$(STOP_AUTONOMY)" >/dev/null 2>&1 || true
 	@# decision_node 的 tree_xml_file 是相對路徑 config/trees.xml，
 	@# 必須從 orca_decision 目錄啟動，否則 BehaviorTree 載入失敗。
 	$(COMPOSE) exec -T -d autonomy /bin/bash -lc "\
 		$(AUTONOMY_SETUP) cd src/orca_decision && \
-		exec ros2 launch orca_decision decision.launch.py > /tmp/decision.log 2>&1"
+		exec ros2 launch orca_decision autonomy.launch.py \
+			$(AUTONOMY_LAUNCH_ARGS) > /tmp/autonomy.log 2>&1"
 
 stop:
 	@echo "==> 停掉所有 ROS 節點"
@@ -178,7 +209,10 @@ logs_control:
 	@$(COMPOSE) exec -T control /bin/bash -lc "tail -n 200 -f /tmp/control.log"
 
 logs_autonomy:
-	@$(COMPOSE) exec -T autonomy /bin/bash -lc "tail -n 200 -f /tmp/decision.log"
+	@$(COMPOSE) exec -T autonomy /bin/bash -lc "tail -n 200 -f /tmp/autonomy.log"
+
+logs_sim:
+	@$(COMPOSE) exec -T sim /bin/bash -lc "tail -n 200 -f /tmp/sim.log"
 
 # --- 模擬 -------------------------------------------------------------------
 
@@ -194,17 +228,36 @@ sim_up: up
 xhost_grant:
 	@if [ "$(HEADLESS)" != "true" ] && [ -n "$(DISPLAY)" ] && command -v xhost >/dev/null 2>&1; then 		xhost +local:root >/dev/null 2>&1 && echo "==> 已授權容器存取 X server（xhost +local:root）" 		|| echo "==> xhost 授權失敗，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	elif [ "$(HEADLESS)" != "true" ] && ! command -v xhost >/dev/null 2>&1; then 		echo "==> 找不到 xhost，Gazebo GUI 可能開不起來；可改用 make sim HEADLESS=true"; 	fi
 
-sim_launch: sim_up xhost_grant
+sim_launch: build_sim xhost_grant
 	@echo "==> 啟動 Gazebo（arena=$(ARENA) seed=$(if $(strip $(SEED)),$(SEED),隨機) headless=$(HEADLESS) drum_style=$(DRUM_STYLE) randomize_water=$(RANDOMIZE_WATER)）"
 	@$(COMPOSE) exec -T sim /bin/bash -lc "pkill -f '[r]os2 launch' || true; sleep 1" 2>/dev/null || true
 	$(COMPOSE) exec -T -d sim /bin/bash -lc "\
-		source /opt/ros/humble/setup.bash && source /root/sim_ws/install/setup.bash && \
+		source /opt/ros/humble/setup.bash && source $(SIM_WS)/install/setup.bash && \
 		exec ros2 launch bringup orca_ros_gz_bridge_launch.py \
 			namespace:=$(ORCA_NAMESPACE) headless:=$(HEADLESS) \
 			$(SIM_LAUNCH_ARGS) > /tmp/sim.log 2>&1"
-	@sleep 8
+	@$(MAKE) --no-print-directory sim_check
 	@$(MAKE) --no-print-directory launch_control SIM=true
-	@$(MAKE) --no-print-directory launch_autonomy
+	@$(MAKE) --no-print-directory launch_autonomy PERCEPTION_CONFIG=simulation_params.yaml
+
+# exec -T -d 會丟掉 ros2 launch 的離開碼，所以「Gazebo 根本沒起來」必須
+# 另外偵測 —— 否則 make sim 會在空池的情況下一路跑完並回傳 0，只在容器裡
+# 的 /tmp/sim.log 留下痕跡。用感測器 topic 當就緒訊號：它同時證明 Gazebo、
+# 世界、模型與 bridge 四者都活著。
+SIM_READY_TIMEOUT ?= 90
+sim_check:
+	@echo "==> 等待模擬就緒（最多 $(SIM_READY_TIMEOUT) 秒）"
+	@$(COMPOSE) exec -T sim /bin/bash -lc '\
+		source /opt/ros/humble/setup.bash; source $(SIM_WS)/install/setup.bash; \
+		for i in $$(seq 1 $(SIM_READY_TIMEOUT)); do \
+			if ros2 topic list 2>/dev/null | grep -qx "/$(ORCA_NAMESPACE)/sensors/imu"; then \
+				echo "    模擬已就緒（$${i}s）"; exit 0; \
+			fi; \
+			sleep 1; \
+		done; \
+		echo "    模擬未在時限內就緒。/tmp/sim.log 末 40 行："; \
+		tail -n 40 /tmp/sim.log 2>&1 | sed "s/^/    /"; \
+		exit 1'
 
 sim: sim_launch
 	@sleep 15
