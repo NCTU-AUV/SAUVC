@@ -199,9 +199,18 @@ endif
 # 關掉之後世界模型會是空的，所有搜尋／接近節點都會跑到逾時。
 PERCEPTION ?= true
 
+# VIZ=true 開感知視覺化（yolov8_visualizer、depth_perception_viz、rqt_image_view）。
+# 留空 = 用 YAML 的值。兩份 YAML 現在都是 false —— 這幾個節點需要 X server，
+# 而 HEADLESS=true 會跳過 xhost_grant，容器裡的 DISPLAY 卻還在，於是
+# cv2.imshow 會在訂閱回呼裡把整個程序帶走，只留下 /tmp/autonomy.log 裡的痕跡。
+VIZ ?=
+
 AUTONOMY_LAUNCH_ARGS := use_perception:=$(PERCEPTION)
 ifneq ($(strip $(PERCEPTION_CONFIG)),)
 AUTONOMY_LAUNCH_ARGS += perception_config:=$(PERCEPTION_CONFIG)
+endif
+ifneq ($(strip $(VIZ)),)
+AUTONOMY_LAUNCH_ARGS += use_viz:=$(VIZ)
 endif
 
 # 模擬場地：finals（決賽，道具位置與 drum 順序每次隨機）或
