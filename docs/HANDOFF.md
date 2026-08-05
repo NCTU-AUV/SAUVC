@@ -159,6 +159,9 @@ Gazebo ──sensors/imu 100Hz────────────────�
 15. **資格賽場地無法產生資料集** —— 新增 `--profile finals|qualification`。
 16. **四項資料集標註缺陷** —— `occluded()` 自遮蔽、`contrast()` 滿版回傳 0、
     方形箱套用圓桶尺寸、`orange_flare` 標註框三倍寬。
+    **注意：這一項當時沒修完。** `orange_flare` 修好了，但正下方三行的
+    `red/yellow/blue_flare` 是同一個缺陷（用底座半徑 0.07 當 half-extent，
+    而底座只佔 0.873 m 裡的最下面 3 cm），框寬 8.75 倍。已於後續補修。
 
 ### 額外發現（不在原稽核清單上）
 - `sim_check` 的就緒判斷改了三次才對（見第 7 節）。
@@ -184,39 +187,54 @@ Gazebo ──sensors/imu 100Hz────────────────�
 
 ---
 
-## 5. 剩下的缺陷（24 項）
+## 5. 剩下的缺陷
 
 原始稽核清單共 41 項，已修 16、推翻 1（上一節）、部分修 1。以下是剩下的，
 依「修了會解鎖什麼」分組。編號沿用原清單。
 
-### A. 阻擋第二階段任務（投球到藍桶）
+> **2026-08-05 更新。** 之後又做了一輪全量 code review（11 個稽核角度 +
+> 對抗式驗證），找出 21 項已驗證缺陷，其中 9 項是上一輪自己引入的回歸、
+> 5 項是「宣稱已修但沒修完」、7 項是本節漏列的。那一輪的修正已經完成，
+> 所以下面 A、B 兩組大部分劃掉了，D 組的 (33) 機制描述也更正了。
+> **C、D、E、F 四組基本上原封不動** —— 那一輪沒有動它們。
+> 另有 6 項候選被驗證推翻，不要去「修」：IMU roll-180 破壞下游消費者、
+> `np.min` 破壞 `occluded()`、`interior_contrast` 恆回 0、
+> `os.sep not in` 的判斷、gate 外三分之一取樣落在框外、
+> `min_col_pts` 讓 `gate_col_min_points` 失效。
+
+### A. 阻擋第二階段任務（投球到藍桶）—— 已修（除 arm 外）
 
 行為樹的 `TargetAcquisition` 是
 `SearchTarget → ApproachTarget → FinalAlignTarget → 切底部相機 → MoveAboveTarget → DropBall → CheckBottomClear`。
 模擬**有**底部相機（`bottom_camera` sensor 已橋接到 `camera/bottom/image_raw`），
 所以這段是可測的。
 
-- **(9, 部分未修)** `SAUVC-JETSON/orca_decision/config/decision_params.yaml`
-  的 `bottom_cam_center_y: 240.0` 應為 `320.0`。我只修了兩個 BT 節點裡寫死的
-  值，這個參數還沒動，`MoveAboveTarget` 仍有永久 80 px 偏差、永遠無法置中
-  （門檻是 20 px），150 秒逾時後 Task 2 失敗。**這是第一個阻塞點。**
-- **致動通道完全沒接** `/orca/decision/arm` 與 `/orca/decision/hand` 在三個
-  堆疊裡都沒有訂閱者；RPI 的致動話題是 `actuators/electromagnet/enabled`，
-  且只接到 Web GUI。`ExtendArm`/`GrabBall`/`RetractArm`/`DropBall` 全都是空
-  操作，等 1 秒後回報 SUCCESS。
-- **`DropBall` 與 `GrabBall` 發相同的值** 兩者都發 `hand.data = false`，而
-  `DropBall` 的註解寫的是 `true`。至多只有一個是對的。
-- **(13)** `yolov8_decoder_node.cpp` 傳給 `cv::dnn::NMSBoxes` 的第 6 個參數
-  `5` 是 `eta`（自適應門檻倍率）不是 `top_k`。門檻每保留一個框就乘 5，很快
-  超過 1.0，NMS 等於失效，每個物件產生多個重複框。
+- ~~**(9, 部分未修)** `bottom_cam_center_y: 240.0`~~ 已修。**原本的描述有兩處
+  錯誤**：(a) 錯的地方有**兩處**不是一處 —— YAML 與 `decision_node.cpp` 的
+  C++ 預設值；(b) 症狀不是「永遠無法置中、150 秒逾時後失敗」。
+  `move_above_target.cpp` 算的是 `obj->cy - center_y`，相對 `center_y` 歸零，
+  迴圈會收斂並回 SUCCESS，真正的症狀是**投球位置固定偏 80 px**。
+  現已收斂成單一的 `image_center_x` / `image_center_y` 參數（320/320），
+  四個節點都讀它 —— 之前有四種寫法，改一處修不好其他三處。
+- ~~**致動通道完全沒接**~~ `hand` 已修：`decision.launch.py` 把
+  `/orca/decision/hand` remap 到 `<ns>/actuators/electromagnet/enabled`
+  （STM32 韌體經 micro-ROS 接收，Web GUI 也發同一個話題）。
+  **`arm` 仍未接** —— 控制端根本沒有手臂致動話題，
+  `ExtendArm`/`RetractArm` 維持空操作直到介面定義出來。
+- ~~**`DropBall` 與 `GrabBall` 發相同的值**~~ 已修。錯的是 `GrabBall`：
+  電磁鐵通電才吸住，所以抓球應為 `true`、投球為 `false`。
+- ~~**(13)** `NMSBoxes` 的 `eta`~~ 已修為 `eta=1.0, top_k=0`。
 
 ### B. 阻擋第三階段任務
 
-- **(7)** `trees.xml` 的 `label="ball"` 不在 7 類模型裡（沒有 ball 這一類）。
-  Task 3 無法成功，`FinalMission` 永遠走不到 `FinishMission`。
-- **(8)** `drop_pose` 由 `DropBall` 寫入 `TargetAcquisition` 子樹的黑板，卻由
-  `TargetReacquisition` 子樹的 `GoToPose` 讀取。BT.CPP v3 的子樹黑板是隔離的，
-  `trees.xml` 沒有 remap 也沒有 `__shared_blackboard`，查找必定失敗。
+- **(7, 仍未解)** `trees.xml` 的 `label="ball"` 不在 7 類模型裡（沒有 ball
+  這一類），`spiral_search_bottom.cpp:47` 也寫死同一個字串。
+  **這不是一行能修的東西**：模型裡就是沒有球這一類，`finals.onnx` 是 7 類、
+  `qualification.onnx` 是 1 類。要嘛用 `generate_dataset.py` 加一類重訓，
+  要嘛改用非 DNN 的方式找球（顏色／形狀），要嘛承認 Task 3 不做。
+  這是設計決策，不要靜默改掉行為樹來假裝它通了。
+- ~~**(8)** `drop_pose` 跨子樹黑板~~ 已修：`FinalMission` 的兩個 `SubTree`
+  都把 `drop_pose` remap 到父層的同一個 key。
 
 ### C. 模擬保真度與效能
 
@@ -251,8 +269,14 @@ Gazebo ──sensors/imu 100Hz────────────────�
 - **(32)** `.env` 的 `XAUTH_FILE` 零引用；`XAUTHORITY` 指向從未掛載的檔案；
   `xhost_grant` 只是 `sim_launch` 的前置條件，`make up`+`make launch` 路徑的
   所有 X11 視窗都開不起來。
-- **(33)** 儀表板的 autonomous 勾選框不跟隨 `system_manager/mode` 更新，進
-  FAULT 後重新啟用需要點兩次，第一次還會回報成功。
+- **(33, 機制原本寫錯，已修一半)** 症狀「進 FAULT 後重新啟用需要點兩次，
+  第一次還會回報成功」**不是**儀表板勾選框不同步造成的 —— supervisor 服務
+  本身就回 `success=True`，只修 GUI 沒有用。真正的原因是 FAULT 鎖存放在
+  `_refresh_mode_from_active_groups` 尾端，而啟用型 handler 走到那裡時已經
+  改過群組、也已經把深度 PID 拉回 ACTIVE，卻永遠不會執行
+  `_activate_wrench_sum` —— 推力全程為零而服務回報成功。
+  **supervisor 那半已修**（閘門移到服務入口）。
+  儀表板勾選框不跟隨 `system_manager/mode` 更新那半仍未修。
 - **(34)** `controller.js` 的 `window.ORCA_CAMERA_TOPIC` 全專案沒有任何地方
   賦值，「相機來源可設定」未實作。
 
