@@ -182,5 +182,5 @@ ros2 bag reindex <bag_dir> -s mcap
 | [docs/SIM_VISUAL_FIDELITY.md](docs/SIM_VISUAL_FIDELITY.md) | 場景依 2026 rulebook 改造、水下成像模型、量化驗證 |
 | [docs/SIMULATION_FINDINGS.md](docs/SIMULATION_FINDINGS.md) | 三容器全鏈路實測報告 |
 | [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) | 重構計畫與決策紀錄 |
-| [SAUVC-RPI/docs/ARCHITECTURE.md](SAUVC-RPI/docs/ARCHITECTURE.md) | 控制堆疊架構 |
-| [SAUVC-JETSON/ARCHITECTURE.md](SAUVC-JETSON/ARCHITECTURE.md) | 感知決策堆疊架構 |
+| [SAUVC-RPI/docs/ARCHITECTURE.html](SAUVC-RPI/docs/ARCHITECTURE.html) | 控制堆疊架構 |
+| [SAUVC-JETSON/ARCHITECTURE.html](SAUVC-JETSON/ARCHITECTURE.html) | 感知決策堆疊架構 |

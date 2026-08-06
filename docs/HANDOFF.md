@@ -4,7 +4,7 @@
 「重構後全專案審查 + 修正」留下的狀態、驗證方法與踩過的坑。
 
 讀完這份之後最該先看的兩份是 `docs/SIMULATION_FINDINGS.md`（更早一輪的模擬
-問題紀錄）與 `SAUVC-RPI/docs/ARCHITECTURE.md`（控制堆疊架構）。
+問題紀錄）與 `SAUVC-RPI/docs/ARCHITECTURE.html`（控制堆疊架構）。
 
 ---
 
