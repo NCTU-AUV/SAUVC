@@ -82,9 +82,21 @@ STOP_CONTROL := \
 	pkill -9 -f '[m]icro_ros_agent' || true; \
 	pkill -9 -f '[r]os2 bag record' || true
 
+# autonomy 的路徑 pattern 不足以涵蓋整個堆疊：autonomy.launch.py 會拉起
+# perception.launch.py 的 ComposableNodeContainer，而那個程序的執行檔是
+# /opt/ros/humble/lib/rclcpp_components/component_container_mt —— 命令列裡
+# 沒有 isaac_ros-dev/install，掃不到。camera_selector、tensor_rt 與
+# yolov8_decoder 都住在那個 container 裡，漏掉就會出現和孤兒 bridge 一樣的
+# 症狀：/orca/selected/image_raw 與 /detections_output 各多一個發布者。
+#
+# sleep 也不能是 2：pkill -INT 之後 ros2 launch 會跑自己的關閉序列
+# （5 s SIGTERM、再 5 s SIGKILL），2 秒回來時子程序還活著，而 launch_autonomy
+# 約 0.5 秒後就啟動替代程序，期間會有兩個 TensorRT/CUDA context 重疊。
 STOP_AUTONOMY := \
-	pkill -INT -f '[r]os2 launch' || true; sleep 2; \
-	pkill -9 -f '[i]saac_ros-dev/install' || true
+	pkill -INT -f '[r]os2 launch' || true; sleep 8; \
+	pkill -9 -f '[i]saac_ros-dev/install' || true; \
+	pkill -9 -f '[c]omponent_container_mt' || true; \
+	pkill -9 -f '[r]qt_image_view' || true
 
 # 模擬同樣不能只殺 ros2 launch：parameter_bridge 與 ign gazebo 都是獨立子
 # 程序，父程序被殺之後它們會變成孤兒繼續跑。孤兒 bridge 的症狀特別難查 ——
@@ -97,8 +109,8 @@ STOP_SIM := \
 	pkill -9 -f '[i]gn gazebo' || true
 
 .PHONY: all up down build build_sim build_images launch launch_control launch_autonomy stop status \
-        sim_up sim sim_launch sim_check xhost_grant logs_control logs_autonomy logs_sim clean doctor \
-        pull_autonomy submodules
+        sim_up sim sim_launch sim_check autonomy_check autonomy_installed xhost_grant \
+        logs_control logs_autonomy logs_sim clean doctor pull_autonomy submodules
 
 all: up build launch status
 
@@ -157,15 +169,48 @@ SIM ?= false
 HEADLESS ?= false
 
 # 感知管線的參數檔。裸檔名由 autonomy.launch.py 解析到 orca_perception/config，
-# 所以這裡不必寫 install space 的完整路徑。留空 = 用管線預設（實機話題）。
-PERCEPTION_CONFIG ?=
+# 所以這裡不必寫 install space 的完整路徑。
+#
+# 預設值由 SIM 推導，不要再由 sim_launch 硬寫。模擬的相機／深度話題掛在
+# ORCA_NAMESPACE 底下（/orca_auv/color/image_raw），實機是 /orca/color/image_raw；
+# 拿錯的後果是整條感知管線訂閱到沒有發布者的話題 —— 沒有任何錯誤，只有一個
+# 永遠空的 /orca/perception_array 和一棵盲跑的行為樹。
+#
+# 以前只有 sim_launch 會設它，所以 make launch / make all / 以及「改完
+# trees.xml 之後用 make launch_autonomy 重啟」這條最自然的路徑，全都會在模擬
+# 情境下載入實機設定。改用 SIM 推導之後這三條路徑一併正確。
+#
+# 這裡不能用 ?=。這個檔案頂端有一個無條件的 `export`（見 include .env 下面
+# 那一行），所以每個變數都會進到遞迴 $(MAKE) 的環境裡 —— 子 make 看到的
+# PERCEPTION_CONFIG 是一個「已定義」的環境變數（父層算出來的空字串），而 ?=
+# 只在變數未定義時才賦值，於是完全不生效。這正是舊寫法非得在子 make 的 argv
+# 上硬寫不可的原因，也是它會蓋掉使用者命令列值的原因。
+#
+# 用 $(origin) 分辨兩者：使用者在命令列給的值（會透過 MAKEFLAGS 傳進子 make，
+# 且 origin 仍是 "command line"）保持不動，其餘一律由 SIM 推導。
+ifneq ($(origin PERCEPTION_CONFIG),command line)
+ifeq ($(SIM),true)
+PERCEPTION_CONFIG := simulation_params.yaml
+else
+PERCEPTION_CONFIG :=
+endif
+endif
 # PERCEPTION=false 只啟動行為樹。單純除錯 BT 時才關，正常不要動 ——
 # 關掉之後世界模型會是空的，所有搜尋／接近節點都會跑到逾時。
 PERCEPTION ?= true
 
+# VIZ=true 開感知視覺化（yolov8_visualizer、depth_perception_viz、rqt_image_view）。
+# 留空 = 用 YAML 的值。兩份 YAML 現在都是 false —— 這幾個節點需要 X server，
+# 而 HEADLESS=true 會跳過 xhost_grant，容器裡的 DISPLAY 卻還在，於是
+# cv2.imshow 會在訂閱回呼裡把整個程序帶走，只留下 /tmp/autonomy.log 裡的痕跡。
+VIZ ?=
+
 AUTONOMY_LAUNCH_ARGS := use_perception:=$(PERCEPTION)
 ifneq ($(strip $(PERCEPTION_CONFIG)),)
 AUTONOMY_LAUNCH_ARGS += perception_config:=$(PERCEPTION_CONFIG)
+endif
+ifneq ($(strip $(VIZ)),)
+AUTONOMY_LAUNCH_ARGS += use_viz:=$(VIZ)
 endif
 
 # 模擬場地：finals（決賽，道具位置與 drum 順序每次隨機）或
@@ -199,7 +244,7 @@ launch_control: up
 # autonomy.launch.py 同時拉起感知管線與決策節點。不要改回
 # decision.launch.py —— 那個只有行為樹，沒有任何節點發布
 # /orca/perception_array，世界模型會永遠是空的。
-launch_autonomy: up
+launch_autonomy: up autonomy_installed
 	@echo "==> 啟動 autonomy 堆疊（perception=$(PERCEPTION)$(if $(strip $(PERCEPTION_CONFIG)), config=$(PERCEPTION_CONFIG)))"
 	@$(COMPOSE) exec -T autonomy /bin/bash -lc "$(STOP_AUTONOMY)" >/dev/null 2>&1 || true
 	@# decision_node 的 tree_xml_file 是相對路徑 config/trees.xml，
@@ -208,6 +253,23 @@ launch_autonomy: up
 		$(AUTONOMY_SETUP) cd src/orca_decision && \
 		exec ros2 launch orca_decision autonomy.launch.py \
 			$(AUTONOMY_LAUNCH_ARGS) > /tmp/autonomy.log 2>&1"
+
+# build / install 是 named volume，映像裡沒有預先 build 過 —— 和 sim_ws 完全
+# 一樣的問題（見 build_sim 的說明），只是這邊沒人處理過。任何新增的檔案在
+# `make build` 之前都不存在於 install space：install(DIRECTORY ...) 在
+# --symlink-install 底下產生的是**逐檔**符號連結，不是整個目錄的連結。
+#
+# 這裡不強制 build（那會讓每次 launch 都付一次 colcon 的代價，而且 build 與
+# launch 本來就刻意分開），只擋住「檔案根本不在」這個必定失敗的情況 ——
+# 否則 exec -T -d 會把 launch 的離開碼吞掉，make sim 印兩行成功訊息、回傳 0，
+# 而 autonomy 容器裡什麼都沒有。
+autonomy_installed: up
+	@$(COMPOSE) exec -T autonomy /bin/bash -lc '\
+		test -f $(AUTONOMY_WS)/install/orca_decision/share/orca_decision/launch/autonomy.launch.py' \
+		2>/dev/null || { \
+		echo "==> autonomy workspace 尚未建置（install space 裡沒有 autonomy.launch.py）"; \
+		echo "    先跑 make build。install 是 named volume，映像裡沒有預先 build 過。"; \
+		exit 1; }
 
 stop:
 	@echo "==> 停掉所有 ROS 節點"
@@ -250,7 +312,10 @@ sim_launch: build_sim xhost_grant
 			$(SIM_LAUNCH_ARGS) > /tmp/sim.log 2>&1"
 	@$(MAKE) --no-print-directory sim_check
 	@$(MAKE) --no-print-directory launch_control SIM=true
-	@$(MAKE) --no-print-directory launch_autonomy PERCEPTION_CONFIG=simulation_params.yaml
+	@# SIM=true 而不是硬寫 PERCEPTION_CONFIG —— 讓 make sim PERCEPTION_CONFIG=x
+	@# 的覆寫能生效，也讓 make launch SIM=true 走到同一組設定。
+	@$(MAKE) --no-print-directory launch_autonomy SIM=true
+	@$(MAKE) --no-print-directory autonomy_check
 
 # exec -T -d 會丟掉 ros2 launch 的離開碼，所以「Gazebo 根本沒起來」必須
 # 另外偵測 —— 否則 make sim 會在空池的情況下一路跑完並回傳 0，只在容器裡
@@ -261,27 +326,71 @@ sim_launch: build_sim xhost_grant
 #   ros2 topic list  —— control 與 autonomy 都訂閱這個 topic，它們活著就列得出來
 #   Publisher count  —— ros_gz_bridge 是獨立程序，Gazebo 死了它照樣掛著發布者
 # 兩者都會在「Gazebo 已經死掉」時回報就緒，正是這個檢查要防的情況。
+# 一定要把訊息型別也寫出來。少了型別，ros2 topic echo 在型別還無法解析時會
+# 直接失敗返回（實測冷啟動 834 ms、熱 158 ms），於是「重試 N 次」根本不等於
+# 「等 N 秒」—— 舊的迴圈沒有 sleep，SIM_READY_TIMEOUT 是迭代次數而不是秒，
+# 實際預算大約 163 秒而橫幅寫 90 秒，成功時還把迭代索引當秒數印出來。
+# 給了型別之後 echo 會建立訂閱並阻塞等資料，單一 timeout 就有精確的時間語意
+# —— status 早就是這樣寫的。
 SIM_READY_TIMEOUT ?= 90
 sim_check:
 	@echo "==> 等待模擬就緒（最多 $(SIM_READY_TIMEOUT) 秒）"
 	@$(COMPOSE) exec -T sim /bin/bash -lc '\
 		source /opt/ros/humble/setup.bash; source $(SIM_WS)/install/setup.bash; \
-		for i in $$(seq 1 $(SIM_READY_TIMEOUT)); do \
-			if timeout 2 ros2 topic echo --once \
-			   /$(ORCA_NAMESPACE)/sensors/imu >/dev/null 2>&1; then \
-				echo "    模擬已就緒（約 $${i}s）"; exit 0; \
-			fi; \
-		done; \
+		if timeout $(SIM_READY_TIMEOUT) ros2 topic echo --once \
+		   /$(ORCA_NAMESPACE)/sensors/imu sensor_msgs/msg/Imu >/dev/null 2>&1; then \
+			echo "    模擬已就緒"; exit 0; \
+		fi; \
 		echo "    模擬未在時限內就緒（$(ORCA_NAMESPACE)/sensors/imu 沒有資料）。"; \
 		echo "    /tmp/sim.log 末 40 行："; \
 		tail -n 40 /tmp/sim.log 2>&1 | sed "s/^/    /"; \
 		exit 1'
+
+# sim_check 的 autonomy 對應版。少了它，launch_autonomy 的 exec -T -d 會把
+# 每一種啟動期失敗都吞掉：autonomy.launch.py 的 perception_config not found、
+# orca_perception 的 PackageNotFoundError、TensorRT engine 建置失敗 ——
+# 全部只留在容器裡的 /tmp/autonomy.log，而 make sim 照樣回傳 0。
+#
+# 逾時給得很寬：TensorRT 第一次會重建 CUDA engine，要好幾分鐘，期間
+# /orca/perception_array 完全沒有資料。這不是故障。
+AUTONOMY_READY_TIMEOUT ?= 600
+autonomy_check:
+	@echo "==> 等待 autonomy 就緒"
+	@$(COMPOSE) exec -T autonomy /bin/bash -lc '\
+		$(AUTONOMY_SETUP) \
+		if timeout 30 ros2 topic echo --once \
+		   /$(ORCA_NAMESPACE)/control/wrench_sources/decision geometry_msgs/msg/Wrench \
+		   >/dev/null 2>&1; then \
+			echo "    decision_node 已就緒"; \
+		else \
+			echo "    decision_node 沒有輸出 wrench。/tmp/autonomy.log 末 40 行："; \
+			tail -n 40 /tmp/autonomy.log 2>&1 | sed "s/^/    /"; \
+			exit 1; \
+		fi'
+ifeq ($(PERCEPTION),true)
+	@echo "    等待感知管線（最多 $(AUTONOMY_READY_TIMEOUT) 秒；首次要等 TensorRT 建 engine）"
+	@$(COMPOSE) exec -T autonomy /bin/bash -lc '\
+		$(AUTONOMY_SETUP) \
+		if timeout $(AUTONOMY_READY_TIMEOUT) ros2 topic echo --once \
+		   /orca/perception_array orca_interface/msg/PerceptionArray >/dev/null 2>&1; then \
+			echo "    感知管線已就緒"; exit 0; \
+		fi; \
+		echo "    /orca/perception_array 沒有資料 —— 行為樹會全程盲跑。"; \
+		echo "    最常見的原因是感知設定與場景不符（make sim 應為 simulation_params.yaml）。"; \
+		echo "    /tmp/autonomy.log 末 40 行："; \
+		tail -n 40 /tmp/autonomy.log 2>&1 | sed "s/^/    /"; \
+		exit 1'
+endif
 
 sim: sim_launch
 	@sleep 15
 	@$(MAKE) --no-print-directory status
 
 # --- 檢查 -------------------------------------------------------------------
+
+# 感知鏈的每個 topic 等多久。status 是「現在健康嗎」的快照，不是啟動等待
+# （那是 autonomy_check 的事），所以這裡要短。
+PERCEPTION_CHAIN_TIMEOUT ?= 5
 
 status:
 	@echo "--- 容器 ---"
@@ -301,11 +410,35 @@ status:
 		timeout 5 ros2 topic info /$(ORCA_NAMESPACE)/control/wrench_sources/decision 2>/dev/null | tr '\n' ' ' || echo '(無)'; echo; \
 		echo -n '  targets/depth_m         : '; \
 		timeout 5 ros2 topic info /$(ORCA_NAMESPACE)/control/targets/depth_m 2>/dev/null | tr '\n' ' ' || echo '(無)'; echo" 2>/dev/null || true
+	@echo ""
+	@# 感知鏈必須用「真的收到資料」判斷，而且要從 autonomy 容器問。
+	@# 以前這一段完全不存在：四個探針全部只 exec 進 control，整份 Makefile
+	@# 沒有任何地方提到 /orca/perception_array，所以「行為樹全程盲跑而
+	@# make status 顯示健康」這個原始症狀，在換掉啟動檔之後依然成立 ——
+	@# 換掉的是啟動檔，偵測器沒換。
+	@#
+	@# 不能用 ros2 topic info 或 topic list：decision_node 訂閱著
+	@# perception_array，它活著就列得出來、也有訂閱者數字，感知全死一樣好看。
+	@echo "--- 感知鏈（$(PERCEPTION_CHAIN_TIMEOUT)s 內要有實際資料）---"
+	@$(COMPOSE) exec -T autonomy /bin/bash -lc "$(AUTONOMY_SETUP) \
+		for spec in \
+			'/orca/selected/image_raw sensor_msgs/msg/Image' \
+			'/orca/perception_array orca_interface/msg/PerceptionArray'; do \
+			set -- \$$spec; \
+			printf '  %-26s : ' \"\$$1\"; \
+			if timeout $(PERCEPTION_CHAIN_TIMEOUT) ros2 topic echo --once \"\$$1\" \"\$$2\" >/dev/null 2>&1; then \
+				echo '有資料'; \
+			else \
+				echo '沒有資料'; \
+			fi; \
+		done" 2>/dev/null || echo "  (autonomy 無回應)"
 
 # 部署前自檢：把最容易靜默失敗的東西一次檢查完。
 doctor:
 	@echo "--- 環境設定一致性 ---"
-	@for svc in control autonomy; do \
+	@# sim 也要列：make sim 會起三個容器，而 DOMAIN／RMW 不一致的症狀
+	@# 就是「所有節點都在、就是收不到彼此的訊息」。
+	@for svc in control autonomy sim; do \
 		printf '  %-10s ' $$svc; \
 		$(COMPOSE) exec -T $$svc /bin/bash -lc \
 			'echo "DOMAIN=$$ROS_DOMAIN_ID RMW=$$RMW_IMPLEMENTATION TRANSPORT=$$FASTDDS_BUILTIN_TRANSPORTS"' \
