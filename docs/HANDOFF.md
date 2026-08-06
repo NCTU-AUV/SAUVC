@@ -52,22 +52,28 @@ SAUVC (超級倉)    整合：Makefile、docker-compose、跨堆疊設定
 資料流（模擬情境）：
 
 ```text
-Gazebo ──sensors/imu 100Hz──────────────────────────► decision_node（世界模型）
-       ──color/image_raw_dry──► underwater_camera ──► camera_selector ──► DNN encoder
-                                                                            │
-                                                                     TensorRT(finals.onnx)
-                                                                            │
+Gazebo --sensors/imu 100Hz----------------------> decision_node (world model)
+       --color/image_raw_dry--> underwater_camera --> camera_selector --> DNN encoder
+                                                                             |
+                                                                             v
+                                                                   TensorRT (finals.onnx)
+                                                                             |
+                                                                             v
                                                                      yolov8_decoder
-                                                                            │
-                                          depth_perception ◄── /detections_output
-                                                     │
-                                          /orca/perception_array ──► decision_node
-                                                                            │
-                                                             BehaviorTree(trees.xml)
-                                                                            │
-                                                                     wrench_adapter
-                                                                            │
-                    control/wrench_sources/decision ──► wrench_sum ──► 推力分配 ──► Gazebo
+                                                                             |
+                                          depth_perception <-- /detections_output
+                                                   |
+                                                   v
+                                          /orca/perception_array --> decision_node
+                                                                             |
+                                                                             v
+                                                              BehaviorTree (trees.xml)
+                                                                             |
+                                                                             v
+                                                                      wrench_adapter
+                                                                             |
+                                                                             v
+                    control/wrench_sources/decision --> wrench_sum --> thrust allocation --> Gazebo
 ```
 
 容器名稱：`orca-control`、`orca-autonomy`、`orca-sim`。

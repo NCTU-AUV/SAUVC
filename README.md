@@ -4,22 +4,24 @@ NCTU-AUV 參加 SAUVC（Singapore AUV Challenge）的水下自主載具。
 這是 **super-repo**：以 submodule 納入所有子系統，提供一次部署、一次啟動的入口。
 
 ```text
-                    ┌─────────────────── Jetson Orin NX ───────────────────┐
-                    │                                                       │
-  RealSense ───────►│  ┌─ container: autonomy ─┐   ┌─ container: control ─┐ │
-  底部 USB 相機 ────►│  │ YOLOv8 (TensorRT)     │   │ 深度 PID             │ │
-                    │  │        ↓              │   │ wrench 匯流排        │ │
-                    │  │ depth_perception      │   │ 推力分配 + 飽和限幅  │ │
-                    │  │        ↓              │   │        ↓             │ │
-                    │  │ BehaviorTree 決策     │──►│  力 → PWM            │ │
-                    │  └───────────────────────┘   └──────────┬───────────┘ │
-                    │        wrench_sources/decision          │             │
-                    │        targets/depth_m                  │             │
-                    └─────────────────────────────────────────┼─────────────┘
-                                                              │ USB
-                                                         ┌────▼────┐
-                                                         │  STM32  │ 壓力/IMU/推進器
-                                                         └─────────┘
+                       +--------------------- Jetson Orin NX ----------------------+
+                       |                                                           |
+  RealSense ---------> |  +-- container: autonomy --+   +-- container: control --+ |
+                       |  | YOLOv8 (TensorRT)       |   | depth PID              | |
+                       |  |         |               |   | wrench bus             | |
+  bottom USB camera -> |  |         v               |   | thrust allocation      | |
+                       |  | depth_perception        |   | + saturation clamp     | |
+                       |  |         |               |   |         |              | |
+                       |  |         v               |   |         v              | |
+                       |  | BehaviorTree decision   |-->|  force -> PWM          | |
+                       |  +-------------------------+   +---------|--------------+ |
+                       |         wrench_sources/decision          |                |
+                       |         targets/depth_m                  |                |
+                       +-----------------------------------------------------------+
+                                                                  | USB
+                                                             +---------+
+                                                             |  STM32  |  pressure / IMU / thrusters
+                                                             +---------+
 ```
 
 | Submodule | 職責 |
