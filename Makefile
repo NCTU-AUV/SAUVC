@@ -205,12 +205,21 @@ PERCEPTION ?= true
 # cv2.imshow 會在訂閱回呼裡把整個程序帶走，只留下 /tmp/autonomy.log 裡的痕跡。
 VIZ ?=
 
+# TREE=<BehaviorTree ID> 指定要跑哪一棵樹，覆蓋 decision_params.yaml 的
+# main_tree_id。留空 = 用 YAML 的值（FinalMission）。
+# 沒有這個變數的話，換樹要改 YAML 再 colcon build 一次才會進 install space。
+#   make sim TREE=StudentSimpleQualMission PERCEPTION=false
+TREE ?=
+
 AUTONOMY_LAUNCH_ARGS := use_perception:=$(PERCEPTION)
 ifneq ($(strip $(PERCEPTION_CONFIG)),)
 AUTONOMY_LAUNCH_ARGS += perception_config:=$(PERCEPTION_CONFIG)
 endif
 ifneq ($(strip $(VIZ)),)
 AUTONOMY_LAUNCH_ARGS += use_viz:=$(VIZ)
+endif
+ifneq ($(strip $(TREE)),)
+AUTONOMY_LAUNCH_ARGS += main_tree_id:=$(TREE)
 endif
 
 # 模擬場地：finals（決賽，道具位置與 drum 順序每次隨機）或

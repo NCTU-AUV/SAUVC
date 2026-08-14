@@ -1,5 +1,11 @@
 # SAUVC —— Orca AUV
 
+> **你正在 `edu/newbie-2026` 教材分支上。**
+> 這條分支給新生實作用，`SAUVC-JETSON` 指向的也是教材分支，**不會合併回 `main`**。
+> 作業說明：[SAUVC-JETSON/docs/FRESHMAN_QUAL_TASK.md](SAUVC-JETSON/docs/FRESHMAN_QUAL_TASK.md)
+>
+> 要跑比賽用的版本請 `git checkout main && make submodules`。
+
 NCTU-AUV 參加 SAUVC（Singapore AUV Challenge）的水下自主載具。
 這是 **super-repo**：以 submodule 納入所有子系統，提供一次部署、一次啟動的入口。
 
@@ -142,6 +148,7 @@ make down      # 停掉容器
 | `DRUM_STYLE` | `random` | `drum` / `tub` / `random` |
 | `RANDOMIZE_WATER` | `false` | 水質與能見度隨時間變化 |
 | `PERCEPTION` | `true` | `false` 只跑行為樹（世界模型會是空的） |
+| `TREE` | 用 YAML 值 | 要跑哪一棵行為樹，覆蓋 `main_tree_id`。不用改 YAML 也不用重新 build |
 
 ---
 

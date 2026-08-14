@@ -1,6 +1,10 @@
 [submodule "SAUVC-JETSON"]
 	path = SAUVC-JETSON
 	url = https://github.com/NCTU-AUV/SAUVC-JETSON.git
+	# 教材分支。git submodule update --remote 會跟著這條分支走，而不是
+	# main。注意 clone 之後 submodule 仍是 detached HEAD，要自己
+	# git -C SAUVC-JETSON checkout edu/newbie-2026 才會在分支上。
+	branch = edu/newbie-2026
 [submodule "SAUVC-RPI"]
 	path = SAUVC-RPI
 	url = https://github.com/NCTU-AUV/SAUVC-RPI.git
