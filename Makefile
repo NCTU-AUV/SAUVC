@@ -205,7 +205,16 @@ PERCEPTION ?= true
 # cv2.imshow 會在訂閱回呼裡把整個程序帶走，只留下 /tmp/autonomy.log 裡的痕跡。
 VIZ ?=
 
-AUTONOMY_LAUNCH_ARGS := use_perception:=$(PERCEPTION)
+# 影像錄製。兩個堆疊都要收到這個值：autonomy 負責把三路彩色相機轉成壓縮影像
+# （壓縮外掛只有那個容器有），control 負責錄。只開一邊會錄到一組空 topic。
+#
+# ⚠ 實測約 38 MB/s，也就是 2.3 GB/min。三路彩色壓縮後合計才 1.6 MB/s，其餘
+#   37 MB/s 全是深度 —— 它必須錄原始 32FC1，理由見 record_topics.yaml。
+#   ros2 bag record 沒有總容量上限，min_free_space_gb 也只在啟動時檢查一次，
+#   所以錄下去就會一路寫到磁碟滿為止。長時間跑之前先確認 ORCA_BAG_DIR 的空間。
+RECORD_IMAGES ?= true
+
+AUTONOMY_LAUNCH_ARGS := use_perception:=$(PERCEPTION) record_images:=$(RECORD_IMAGES)
 ifneq ($(strip $(PERCEPTION_CONFIG)),)
 AUTONOMY_LAUNCH_ARGS += perception_config:=$(PERCEPTION_CONFIG)
 endif
@@ -235,17 +244,18 @@ launch: launch_control launch_autonomy
 	@echo "節點啟動中，用 make status 查看"
 
 launch_control: up
-	@echo "==> 啟動 control 堆疊（sim=$(SIM)）"
+	@echo "==> 啟動 control 堆疊（sim=$(SIM) record_images=$(RECORD_IMAGES)）"
 	@$(COMPOSE) exec -T control /bin/bash -lc "$(STOP_CONTROL)" >/dev/null 2>&1 || true
 	$(COMPOSE) exec -T -d control /bin/bash -lc "\
 		$(CONTROL_SETUP) \
-		exec ros2 launch orca_bringup bringup.launch.py sim:=$(SIM) > /tmp/control.log 2>&1"
+		exec ros2 launch orca_bringup bringup.launch.py sim:=$(SIM) \
+			record_images:=$(RECORD_IMAGES) > /tmp/control.log 2>&1"
 
 # autonomy.launch.py 同時拉起感知管線與決策節點。不要改回
 # decision.launch.py —— 那個只有行為樹，沒有任何節點發布
 # /orca/perception_array，世界模型會永遠是空的。
 launch_autonomy: up autonomy_installed
-	@echo "==> 啟動 autonomy 堆疊（perception=$(PERCEPTION)$(if $(strip $(PERCEPTION_CONFIG)), config=$(PERCEPTION_CONFIG)))"
+	@echo "==> 啟動 autonomy 堆疊（perception=$(PERCEPTION) record_images=$(RECORD_IMAGES)$(if $(strip $(PERCEPTION_CONFIG)), config=$(PERCEPTION_CONFIG)))"
 	@$(COMPOSE) exec -T autonomy /bin/bash -lc "$(STOP_AUTONOMY)" >/dev/null 2>&1 || true
 	@# decision_node 的 tree_xml_file 是相對路徑 config/trees.xml，
 	@# 必須從 orca_decision 目錄啟動，否則 BehaviorTree 載入失敗。
