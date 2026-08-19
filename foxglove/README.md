@@ -27,6 +27,11 @@ Foxglove 左上 layout 選單 → **Import from file…** → 選 `foxglove/orca
 
 - **影像面板需要 `RECORD_IMAGES=true` 錄的 bag。**沒開的話那幾個面板會是空的，
   其餘面板照常。
+- **「賽後回放」的深度面板讀 `/orca/record/depth/compressed`** —— 已經是
+  0-10 m 的灰階 JPEG（近黑遠白），不是原始深度，所以面板上沒有 min/max 可調，
+  超過 10 m 的池壁一律是白的。2026-08-19 之前錄的 bag 裡是原始 32FC1
+  （`/orca_auv/depth/image_raw` 或 `/orca/aligned_depth_to_color/image_raw`），
+  那些 bag 這個面板會是空的，手動把 topic 改回去即可。
 - `/orca/decision/status` 與 `/orca/perception_array` 是 `orca_interface` 型別。
   這兩條在 2026-08-14 之前錄的 bag 裡**不存在** —— 當時 `orca_interface` 沒有
   build 進 control 容器，`ros2 bag record` 會靜默跳過它們（只在 launch log 留下

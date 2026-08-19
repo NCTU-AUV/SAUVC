@@ -205,13 +205,15 @@ PERCEPTION ?= true
 # cv2.imshow 會在訂閱回呼裡把整個程序帶走，只留下 /tmp/autonomy.log 裡的痕跡。
 VIZ ?=
 
-# 影像錄製。兩個堆疊都要收到這個值：autonomy 負責把三路彩色相機轉成壓縮影像
-# （壓縮外掛只有那個容器有），control 負責錄。只開一邊會錄到一組空 topic。
+# 影像錄製。兩個堆疊都要收到這個值：autonomy 負責把四路相機轉成壓縮影像
+# （壓縮外掛只有那個容器有；深度是自己的節點轉灰階 JPEG），control 負責錄。
+# 只開一邊會錄到一組空 topic。
 #
-# ⚠ 實測約 38 MB/s，也就是 2.3 GB/min。三路彩色壓縮後合計才 1.6 MB/s，其餘
-#   37 MB/s 全是深度 —— 它必須錄原始 32FC1，理由見 record_topics.yaml。
-#   ros2 bag record 沒有總容量上限，min_free_space_gb 也只在啟動時檢查一次，
-#   所以錄下去就會一路寫到磁碟滿為止。長時間跑之前先確認 ORCA_BAG_DIR 的空間。
+# ⚠ 實測約 1.3 MB/s（模擬全鏈路），也就是 80 MB/min。（深度改錄灰階 JPEG 之前是 38 MB/s
+#   ＝ 2.3 GB/min，其中 37 MB/s 全是原始 32FC1 深度 —— 為什麼改、換掉了什麼，
+#   見 record_topics.yaml。）ros2 bag record 沒有總容量上限，
+#   min_free_space_gb 也只在啟動時檢查一次，所以錄下去就會一路寫到磁碟滿為止。
+#   長時間跑之前先確認 ORCA_BAG_DIR 的空間。
 RECORD_IMAGES ?= true
 
 AUTONOMY_LAUNCH_ARGS := use_perception:=$(PERCEPTION) record_images:=$(RECORD_IMAGES)

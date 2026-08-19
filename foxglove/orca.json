@@ -342,9 +342,7 @@
     },
     "Image!depth_r": {
       "imageMode": {
-        "imageTopic": "/orca_auv/depth/image_raw",
-        "minValue": 0,
-        "maxValue": 20
+        "imageTopic": "/orca/record/depth/compressed"
       }
     },
     "StateTransitions!replay": {
