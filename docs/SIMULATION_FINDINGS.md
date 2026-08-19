@@ -2,7 +2,7 @@
 
 > 日期：2026-08-03
 > 環境：x86_64 開發機（20 core / 30 GB RAM / NVIDIA GPU），非 Jetson
-> 範圍：SAUVC-Simulation（Gazebo Fortress）＋ SAUVC-RPI（控制堆疊）＋ SAUVC-JETSON（`orca_decision` BT）三個容器同時運行
+> 範圍：SAUVC-Simulation（Gazebo Fortress）＋ SAUVC-RPI（控制堆疊）＋ SAUVC-Autonomy（`orca_decision` BT）三個容器同時運行
 
 本文件記錄**實際跑起來**觀測到的行為，與 [REFACTOR_PLAN.md](REFACTOR_PLAN.md) 的靜態分析互補。所有結論都附實測數據。
 
@@ -213,9 +213,9 @@ where CMakeCache.txt was created.
 
 | 項目 | 大小 |
 |---|---|
-| `SAUVC-JETSON/model/`（5 個 `.onnx`） | 214 MB |
+| `SAUVC-Autonomy/model/`（5 個 `.onnx`） | 214 MB |
 | 其中未被任何 config 引用 | `best_conti.onnx`、`best_pretrain.onnx` = 86 MB |
-| `SAUVC-JETSON/.git` | 310 MB |
+| `SAUVC-Autonomy/.git` | 310 MB |
 
 `.onnx` 直接 commit 進 git，每次 clone 都要拉 310 MB。建議改 Git LFS 或 GitHub Release artifact + 啟動時下載。
 
@@ -240,7 +240,7 @@ docker exec -d <rpi> bash -lc 'export FASTDDS_BUILTIN_TRANSPORTS=UDPv4 && \
 # 3) 決策層
 docker run -d --name jetson --network host --gpus all \
   -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
-  -v $PWD/SAUVC-JETSON:/workspaces/isaac_ros-dev/src \
+  -v $PWD/SAUVC-Autonomy:/workspaces/isaac_ros-dev/src \
   -w /workspaces/isaac_ros-dev isaac_ros_dev-x86_64:latest sleep infinity
 docker exec jetson bash -lc 'colcon build --packages-up-to orca_decision'
 docker exec -d jetson bash -lc 'cd src/orca_decision && ros2 launch orca_decision decision.launch.py'

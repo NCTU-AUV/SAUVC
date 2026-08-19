@@ -1,5 +1,5 @@
-[submodule "SAUVC-JETSON"]
-	path = SAUVC-JETSON
+[submodule "SAUVC-Autonomy"]
+	path = SAUVC-Autonomy
 	url = https://github.com/NCTU-AUV/SAUVC-Autonomy.git
 [submodule "SAUVC-RPI"]
 	path = SAUVC-RPI
