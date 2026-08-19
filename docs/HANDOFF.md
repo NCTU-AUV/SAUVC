@@ -14,7 +14,7 @@
 
 | 順序 | PR | 內容 |
 |---|---|---|
-| 1 | [SAUVC-JETSON#5](https://github.com/NCTU-AUV/SAUVC-JETSON/pull/5) | 感知管線接進啟動流程、IMU 話題與重力座標、gate 深度與接近邏輯 |
+| 1 | [SAUVC-Autonomy#5](https://github.com/NCTU-AUV/SAUVC-Autonomy/pull/5) | 感知管線接進啟動流程、IMU 話題與重力座標、gate 深度與接近邏輯 |
 | 1 | [SAUVC-RPI#116](https://github.com/NCTU-AUV/SAUVC-RPI/pull/116) | 模式請求回絕、FAULT 鎖存、深度力箝制 |
 | 1 | [SAUVC-Simulation#25](https://github.com/NCTU-AUV/SAUVC-Simulation/pull/25) | IMU 安裝姿態、資料集標註四項、資格賽 profile |
 | 2 | [SAUVC#2](https://github.com/NCTU-AUV/SAUVC/pull/2) | Makefile 三項 + 三個子模組指標 |
@@ -43,7 +43,7 @@ request.`），任何直接 push 到 main 都會被拒絕，不要浪費時間�
 三個子模組 + 一個整合層，全部跑在 Docker 容器裡，由超級倉的 `Makefile` 驅動。
 
 ```text
-SAUVC-JETSON     自主：YOLOv8(TensorRT) 感知管線 + BehaviorTree 決策
+SAUVC-Autonomy     自主：YOLOv8(TensorRT) 感知管線 + BehaviorTree 決策
 SAUVC-RPI        控制：深度 PID、wrench 匯流排、推力分配、系統狀態機、Web GUI
 SAUVC-Simulation 模擬：Gazebo Fortress 世界、水下相機渲染、場地生成、資料集產生
 SAUVC (超級倉)    整合：Makefile、docker-compose、跨堆疊設定
@@ -325,7 +325,7 @@ Gazebo --sensors/imu 100Hz----------------------> decision_node (world model)
   任何設了 `"default-runtime": "nvidia"` 的機器上會。
 - 三個映像都已在本機：`dianyueguo/orca-auv-rpi-ros2-image`、
   `isaac_ros_dev-x86_64`、`orca-auv-gazebo-simulation-image`。
-- 模型檔在 `SAUVC-JETSON/model/`：`finals.onnx`(7類)、`qualification.onnx`(1類)、
+- 模型檔在 `SAUVC-Autonomy/model/`：`finals.onnx`(7類)、`qualification.onnx`(1類)、
   `sim_best.onnx`、`best_conti.onnx`、`best_pretrain.onnx`。
 
 ### 完整啟動

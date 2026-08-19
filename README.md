@@ -27,7 +27,7 @@ NCTU-AUV 參加 SAUVC（Singapore AUV Challenge）的水下自主載具。
 | Submodule | 職責 |
 |---|---|
 | [SAUVC-RPI](SAUVC-RPI/) | 控制：PID、wrench 匯流排、推力分配、系統模式與安全、Web GUI |
-| [SAUVC-JETSON](SAUVC-JETSON/) | 感知與決策：YOLOv8 + 深度估計 + BehaviorTree |
+| [SAUVC-Autonomy](SAUVC-Autonomy/) | 感知與決策：YOLOv8 + 深度估計 + BehaviorTree |
 | [SAUVC-Simulation](SAUVC-Simulation/) | Gazebo Fortress 場景與 ROS 橋接 |
 | SAUVC-STM32 | 韌體（在 SAUVC-RPI 底下） |
 
@@ -161,8 +161,8 @@ make down      # 停掉容器
 |---|---|
 | [`.env`](.env) | namespace、DDS、裝置路徑、DISPLAY |
 | [SAUVC-RPI/.../orca_bringup/config/](SAUVC-RPI/rpi_ros2_ws/src/orca_bringup/config/) | PID 增益、推進器幾何、bag 錄製 |
-| [SAUVC-JETSON/.../orca_perception/config/](SAUVC-JETSON/perception_pipeline/orca_perception/config/) | 感知管線（實機 / 模擬兩份） |
-| [SAUVC-JETSON/orca_decision/config/](SAUVC-JETSON/orca_decision/config/) | 行為樹與決策參數 |
+| [SAUVC-Autonomy/.../orca_perception/config/](SAUVC-Autonomy/perception_pipeline/orca_perception/config/) | 感知管線（實機 / 模擬兩份） |
+| [SAUVC-Autonomy/orca_decision/config/](SAUVC-Autonomy/orca_decision/config/) | 行為樹與決策參數 |
 
 ---
 
@@ -191,4 +191,4 @@ ros2 bag reindex <bag_dir> -s mcap
 | [docs/SIMULATION_FINDINGS.md](docs/SIMULATION_FINDINGS.md) | 三容器全鏈路實測報告 |
 | [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) | 重構計畫與決策紀錄 |
 | [SAUVC-RPI/docs/ARCHITECTURE.html](SAUVC-RPI/docs/ARCHITECTURE.html) | 控制堆疊架構 |
-| [SAUVC-JETSON/ARCHITECTURE.html](SAUVC-JETSON/ARCHITECTURE.html) | 感知決策堆疊架構 |
+| [SAUVC-Autonomy/ARCHITECTURE.html](SAUVC-Autonomy/ARCHITECTURE.html) | 感知決策堆疊架構 |

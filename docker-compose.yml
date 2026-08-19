@@ -4,7 +4,7 @@
 # 一次拉起載具上的兩個堆疊：
 #
 #   control   —— 載具控制（SAUVC-RPI）：PID、wrench 匯流排、推力分配
-#   autonomy  —— 感知與決策（SAUVC-JETSON）：YOLOv8 + BehaviorTree
+#   autonomy  —— 感知與決策（SAUVC-Autonomy）：YOLOv8 + BehaviorTree
 #
 # 兩者跑在同一塊 Jetson Orin NX 上但維持獨立容器，理由：base image 無法調和
 # （CUDA devel + Isaac ROS 全家桶 vs 乾淨的 ros:humble）；改動頻率差距極大
@@ -69,9 +69,9 @@ services:
       # Web GUI 的 gui_node 同樣反序列化不了 DecisionStatus，那正是任務狀態得
       # 另外走一條 JSON 鏡像 topic 的原因。
       #
-      # 掛的是 SAUVC-JETSON 那份唯一的定義，不是複製一份 —— 訊息一旦有兩份
+      # 掛的是 SAUVC-Autonomy 那份唯一的定義，不是複製一份 —— 訊息一旦有兩份
       # 定義就會漂移，而漂移的症狀是 CDR 解出亂數，不是編譯錯誤。
-      - ./SAUVC-JETSON/orca_interface:/root/rpi_ros2_ws/src/orca_interface:ro
+      - ./SAUVC-Autonomy/orca_interface:/root/rpi_ros2_ws/src/orca_interface:ro
       - ./SAUVC-RPI/SAUVC-STM32/build:/root/rpi_ros2_ws/stm32_binary
       - ${ORCA_BAG_DIR:-./bags}:/root/bags
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -100,7 +100,7 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: all
     volumes:
       - /dev:/dev
-      - ./SAUVC-JETSON:/workspaces/isaac_ros-dev/src
+      - ./SAUVC-Autonomy:/workspaces/isaac_ros-dev/src
       - autonomy_build:/workspaces/isaac_ros-dev/build
       - autonomy_install:/workspaces/isaac_ros-dev/install
       - autonomy_log:/workspaces/isaac_ros-dev/log
