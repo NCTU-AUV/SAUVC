@@ -1,0 +1,420 @@
+{
+  "configById": {
+    "Tab!orca": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "感知 · gate",
+          "layout": {
+            "first": {
+              "first": "Image!front",
+              "second": "Image!detections",
+              "direction": "column",
+              "splitPercentage": 50
+            },
+            "second": {
+              "first": "Plot!gate_distance",
+              "second": {
+                "first": "StateTransitions!gate_flags",
+                "second": "RawMessages!gate_obj",
+                "direction": "column",
+                "splitPercentage": 42
+              },
+              "direction": "column",
+              "splitPercentage": 40
+            },
+            "direction": "row",
+            "splitPercentage": 45
+          }
+        },
+        {
+          "title": "任務進度",
+          "layout": {
+            "first": {
+              "first": "StateTransitions!mission",
+              "second": "Plot!mission_time",
+              "direction": "column",
+              "splitPercentage": 65
+            },
+            "second": {
+              "first": "Image!detections_m",
+              "second": "RawMessages!status",
+              "direction": "column",
+              "splitPercentage": 45
+            },
+            "direction": "row",
+            "splitPercentage": 58
+          }
+        },
+        {
+          "title": "控制 · 深度 PID",
+          "layout": {
+            "first": {
+              "first": "Plot!depth_track",
+              "second": "Plot!pid_force",
+              "direction": "column",
+              "splitPercentage": 62
+            },
+            "second": {
+              "first": "Plot!wrench_bus",
+              "second": "Plot!thrusters",
+              "direction": "column",
+              "splitPercentage": 50
+            },
+            "direction": "row",
+            "splitPercentage": 50
+          }
+        },
+        {
+          "title": "賽後回放",
+          "layout": {
+            "first": {
+              "first": "Image!front_r",
+              "second": "Image!depth_r",
+              "direction": "row",
+              "splitPercentage": 50
+            },
+            "second": {
+              "first": "StateTransitions!replay",
+              "second": {
+                "first": "Plot!depth_replay",
+                "second": "RawMessages!status_replay",
+                "direction": "row",
+                "splitPercentage": 55
+              },
+              "direction": "column",
+              "splitPercentage": 42
+            },
+            "direction": "column",
+            "splitPercentage": 42
+          }
+        }
+      ]
+    },
+
+    "Image!front": {
+      "imageMode": {
+        "imageTopic": "/orca/record/front/compressed"
+      }
+    },
+    "Image!detections": {
+      "imageMode": {
+        "imageTopic": "/orca/record/detections/compressed"
+      }
+    },
+    "Plot!gate_distance": {
+      "paths": [
+        {
+          "value": "/orca/perception_array.objects[:]{label==\"gate\"}.distance",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "gate distance (m) — -1 代表深度被拒絕",
+          "color": "#4e9a06"
+        },
+        {
+          "value": "/orca/perception_array.objects[:]{label==\"gate\"}.confidence",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "confidence",
+          "color": "#c4a000"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "StateTransitions!gate_flags": {
+      "paths": [
+        {
+          "value": "/orca/perception_array.objects[:]{label==\"gate\"}.valid",
+          "timestampMethod": "receiveTime",
+          "label": "gate valid（單幀深度可信）"
+        },
+        {
+          "value": "/orca/perception_array.objects[:]{label==\"gate\"}.is_stable",
+          "timestampMethod": "receiveTime",
+          "label": "gate is_stable（進得了世界模型）"
+        },
+        {
+          "value": "/orca/decision/status.current_action",
+          "timestampMethod": "receiveTime",
+          "label": "BT 節點"
+        }
+      ],
+      "isSynced": true
+    },
+    "RawMessages!gate_obj": {
+      "topicPath": "/orca/perception_array.objects[:]{label==\"gate\"}",
+      "fontSize": 12,
+      "defaultExpanded": true
+    },
+
+    "StateTransitions!mission": {
+      "paths": [
+        {
+          "value": "/orca/decision/status.current_action",
+          "timestampMethod": "receiveTime",
+          "label": "BT 節點"
+        },
+        {
+          "value": "/orca/decision/status.target_label",
+          "timestampMethod": "receiveTime",
+          "label": "追蹤目標"
+        },
+        {
+          "value": "/orca/decision/status.target_locked",
+          "timestampMethod": "receiveTime",
+          "label": "目標鎖定"
+        },
+        {
+          "value": "/orca/decision/status.is_recovering",
+          "timestampMethod": "receiveTime",
+          "label": "AvoidObstacle 接管"
+        },
+        {
+          "value": "/orca/decision/status.camera_mode",
+          "timestampMethod": "receiveTime",
+          "label": "相機模式"
+        },
+        {
+          "value": "/orca_auv/system_manager/mode.data",
+          "timestampMethod": "receiveTime",
+          "label": "系統模式"
+        },
+        {
+          "value": "/orca_auv/sensors/killed.data",
+          "timestampMethod": "receiveTime",
+          "label": "Kill switch"
+        },
+        {
+          "value": "/orca_auv/thrusters/enabled.data",
+          "timestampMethod": "receiveTime",
+          "label": "推進器致能"
+        }
+      ],
+      "isSynced": true
+    },
+    "Plot!mission_time": {
+      "paths": [
+        {
+          "value": "/orca/decision/status.mission_time",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "任務經過時間 (s)"
+        }
+      ],
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Image!detections_m": {
+      "imageMode": {
+        "imageTopic": "/orca/record/detections/compressed"
+      }
+    },
+    "RawMessages!status": {
+      "topicPath": "/orca/decision/status",
+      "fontSize": 12,
+      "defaultExpanded": true
+    },
+
+    "Plot!depth_track": {
+      "paths": [
+        {
+          "value": "/orca_auv/control/targets/depth_m.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "目標深度 (m)",
+          "color": "#cc0000"
+        },
+        {
+          "value": "/orca_auv/state/depth_m.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "實際深度 (m)",
+          "color": "#3465a4"
+        },
+        {
+          "value": "/orca_auv/sensors/depth_m.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "壓力計原始 (m)",
+          "color": "#75507b"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Plot!pid_force": {
+      "paths": [
+        {
+          "value": "/orca_auv/control/pid/depth/sink_force_N.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "深度 PID 輸出 (N)"
+        }
+      ],
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Plot!wrench_bus": {
+      "paths": [
+        {
+          "value": "/orca_auv/control/wrench_command.force.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "合力 force.x",
+          "color": "#000000"
+        },
+        {
+          "value": "/orca_auv/control/wrench_sources/decision.force.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "decision force.x",
+          "color": "#4e9a06"
+        },
+        {
+          "value": "/orca_auv/control/wrench_sources/gui.force.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "gui force.x",
+          "color": "#c4a000"
+        },
+        {
+          "value": "/orca_auv/control/wrench_command.force.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "合力 force.z（下沉為正）"
+        },
+        {
+          "value": "/orca_auv/control/wrench_sources/depth.force.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "depth PID force.z"
+        },
+        {
+          "value": "/orca_auv/control/wrench_command.torque.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "合力 torque.z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "Plot!thrusters": {
+      "paths": [
+        {"value": "/orca_auv/thrusters/thruster_0/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T0"},
+        {"value": "/orca_auv/thrusters/thruster_1/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T1"},
+        {"value": "/orca_auv/thrusters/thruster_2/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T2"},
+        {"value": "/orca_auv/thrusters/thruster_3/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T3"},
+        {"value": "/orca_auv/thrusters/thruster_4/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T4"},
+        {"value": "/orca_auv/thrusters/thruster_5/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T5"},
+        {"value": "/orca_auv/thrusters/thruster_6/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T6"},
+        {"value": "/orca_auv/thrusters/thruster_7/force_N.data", "enabled": true, "timestampMethod": "receiveTime", "label": "T7"}
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+
+    "Image!front_r": {
+      "imageMode": {
+        "imageTopic": "/orca/record/front/compressed"
+      }
+    },
+    "Image!depth_r": {
+      "imageMode": {
+        "imageTopic": "/orca/record/depth/compressed"
+      }
+    },
+    "StateTransitions!replay": {
+      "paths": [
+        {
+          "value": "/orca/decision/status.current_action",
+          "timestampMethod": "receiveTime",
+          "label": "BT 節點"
+        },
+        {
+          "value": "/orca/decision/status.target_locked",
+          "timestampMethod": "receiveTime",
+          "label": "目標鎖定"
+        },
+        {
+          "value": "/orca/perception_array.objects[:]{label==\"gate\"}.valid",
+          "timestampMethod": "receiveTime",
+          "label": "gate 深度有效"
+        },
+        {
+          "value": "/orca_auv/system_manager/mode.data",
+          "timestampMethod": "receiveTime",
+          "label": "系統模式"
+        },
+        {
+          "value": "/orca_auv/sensors/killed.data",
+          "timestampMethod": "receiveTime",
+          "label": "Kill switch"
+        }
+      ],
+      "isSynced": true
+    },
+    "Plot!depth_replay": {
+      "paths": [
+        {
+          "value": "/orca_auv/control/targets/depth_m.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "目標深度 (m)",
+          "color": "#cc0000"
+        },
+        {
+          "value": "/orca_auv/state/depth_m.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "實際深度 (m)",
+          "color": "#3465a4"
+        },
+        {
+          "value": "/orca/perception_array.objects[:]{label==\"gate\"}.distance",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "gate distance (m)",
+          "color": "#4e9a06"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp"
+    },
+    "RawMessages!status_replay": {
+      "topicPath": "/orca/decision/status.debug",
+      "fontSize": 14
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": "Tab!orca"
+}

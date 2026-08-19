@@ -116,7 +116,15 @@ FAULT 中的啟用請求會被回絕（`success=False`），要先 `safe_disable
 | `make logs_autonomy` | autonomy 的 launch log |
 | `make logs_sim` | Gazebo 的 launch log |
 
-行為樹走到哪：
+錄好的 bag 用 Foxglove 開：匯入 [`foxglove/orca.json`](foxglove/orca.json)（四個分頁：
+感知/gate、任務進度、控制與深度 PID、賽後回放），說明見
+[foxglove/README.md](foxglove/README.md)。
+
+行為樹走到哪：Web GUI 的 Mission 面板會顯示目前的 BT 節點、追蹤目標與鎖定狀態、
+任務樹、相機模式與節點自己的除錯字串（資料來自 `/orca/decision/status_json`）。
+面板顯示 `offline` 代表 autonomy 容器還沒起來或已經掛了，不是「閒置」。
+
+CLI 版本：
 
 ```shell
 docker compose exec autonomy bash -lc 'source /opt/ros/humble/setup.bash && source /workspaces/isaac_ros-dev/install/setup.bash && ros2 topic echo /orca/decision/status'
