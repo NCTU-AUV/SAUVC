@@ -30,3 +30,7 @@ services:
     gpus: all      # Gazebo 算繪需要
     devices:
       - /dev/dri:/dev/dri
+    environment:
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
