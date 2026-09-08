@@ -4,6 +4,14 @@ bags/
 # 重構期間的節點／topic 快照與 param dump
 snapshots/
 
+# colcon 產物
+build/
+install/
+log/
+
+# 模擬批次跑測的輸出
+logs_sim_batch/
+
 # 本機覆蓋（不進版控，用來覆寫 .env 的值）
 .env.local
 
