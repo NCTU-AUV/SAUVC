@@ -1,6 +1,6 @@
-# SAUVC-RPI 重構計畫書
+# SAUVC-Control 重構計畫書
 
-> 狀態：**SAUVC-RPI 階段 0–5 完成；super-repo 與 Isaac 映像瘦身亦已完成**（2026-08-03）
+> 狀態：**SAUVC-Control 階段 0–5 完成；super-repo 與 Isaac 映像瘦身亦已完成**（2026-08-03）
 > 撰寫日期：2026-07-25／決策定案與開工：2026-08-03
 > 適用範圍：`rpi_ros2_ws` 底下的 ROS 2 packages 與 launch / 設定 / 容器組態
 >
@@ -35,7 +35,7 @@
 | 硬體拓撲 | **Raspberry Pi 完全移除**，STM32 改為直接以 USB 接上 Jetson Orin NX |
 | 執行平台 | JETSON 與 RPI 兩套堆疊都跑在**同一塊 Jetson Orin NX** 上 |
 | 容器策略 | **維持兩個獨立 container**，由一個新的 super-repo 以單一 compose 同時啟動 |
-| Repo 組織 | 新建 super-repo，以 submodule 方式納入 SAUVC-JETSON / SAUVC-RPI / SAUVC-Simulation |
+| Repo 組織 | 新建 super-repo，以 submodule 方式納入 SAUVC-Autonomy / SAUVC-Control / SAUVC-Simulation |
 | Isaac ROS | **留在 3.2 / JetPack 6 / Humble**，先做映像檔瘦身，不升級 4.x |
 | RealSense | 實機會用，realsense 映像層必須保留 |
 
@@ -48,7 +48,7 @@
 1. **本 repo 的定位改變。** 它不再是「跑在樹莓派上的程式」，而是「載具控制堆疊（vehicle control stack）」，只是剛好被包在自己的 container 裡。README、ARCHITECTURE.md 的敘述、乃至 repo 名稱都需要重新檢視。
 2. **序列埠假設全部要重驗。** `micro_ros_agent` 的 `/dev/ttyUSB0`、`stm32_flasher_node` 的 ST-Link、`mavros` 的 `/dev/ttyACM0`，全部從 RPi 的 USB 換成 Jetson 的 USB。裝置節點編號在新主機上不保證相同，硬編碼路徑必須改成可設定，並優先改用 `by-id` 穩定路徑。
 3. **RMW 必須統一，且這件事變成阻斷性問題。** 現況兩邊不一致：
-   - Isaac ROS 側：[run_dev.sh:232](../../SAUVC-JETSON/isaac_ros_common/scripts/run_dev.sh) 寫死 `rmw_cyclonedds_cpp`
+   - Isaac ROS 側：[run_dev.sh:232](../../SAUVC-Autonomy/isaac_ros_common/scripts/run_dev.sh) 寫死 `rmw_cyclonedds_cpp`
    - 本 repo 側：[docker-compose.yml:17](../docker-compose.yml) 與 Makefile 用 `rmw_fastrtps_cpp`
 
    跨 DDS 廠商透過 RTPS 互通在 ROS 2 理論上可行、實務上極不可靠。過去雙板架構下就已經有這個問題（值得回頭確認實機上 `wrench_sources/decision` 是否真的通過）；改成同一塊板子後，兩個 container 都用 host network，這個不一致會直接讓兩邊看不到彼此。
@@ -60,7 +60,7 @@
 
 ## 2. 本次範圍與不在範圍內的事
 
-### 2.1 本次要做（SAUVC-RPI 內部）
+### 2.1 本次要做（SAUVC-Control 內部）
 
 - 砍掉非主線 component，保留主線：接收 JETSON 的 `wrench_sources/decision` 與 `targets/depth_m`，用 PID 達成目標，並維持其餘感測器 topic
 - 光流（LK optical flow）相關介面全部移除，以 legacy 形式保留原始碼
@@ -143,8 +143,8 @@
 
 這幾點在合併到同一塊板子後會更容易踩到，先記錄：
 
-1. **單位不一致，且 YAML 與程式碼預設差 100 倍。** [decision_params.yaml](../../SAUVC-JETSON/orca_decision/config/decision_params.yaml) 的 `move_above_max_surge: 15.0`、`bump_flare_surge: 25.0`，對應 [decision_node.cpp](../../SAUVC-JETSON/orca_decision/src/decision_node.cpp) 預設是 `0.15`、`0.25`；偏偏 `go_to_pose_surge` 兩邊都是 `0.3` 未調整。這些值乘上 `k_surge` 後**直接當牛頓**進入本 repo 的分配矩陣。實際後果：`BumpFlare` 出約 20 N，`GoToPose` 出約 0.24 N（等於不動）。
-2. **`heave` 無增益且無人設定。** [wrench_adapter.cpp:33](../../SAUVC-JETSON/orca_decision/src/wrench_adapter.cpp) 的 `force.z = heave` 是唯一沒乘係數的軸。目前所有 BT 節點都未設定 heave，故恆為 0；但一旦有人設定，它會**直接對抗深度 PID**，且兩者都在 wrench bus 上靜默相加。
+1. **單位不一致，且 YAML 與程式碼預設差 100 倍。** [decision_params.yaml](../../SAUVC-Autonomy/orca_decision/config/decision_params.yaml) 的 `move_above_max_surge: 15.0`、`bump_flare_surge: 25.0`，對應 [decision_node.cpp](../../SAUVC-Autonomy/orca_decision/src/decision_node.cpp) 預設是 `0.15`、`0.25`；偏偏 `go_to_pose_surge` 兩邊都是 `0.3` 未調整。這些值乘上 `k_surge` 後**直接當牛頓**進入本 repo 的分配矩陣。實際後果：`BumpFlare` 出約 20 N，`GoToPose` 出約 0.24 N（等於不動）。
+2. **`heave` 無增益且無人設定。** [wrench_adapter.cpp:33](../../SAUVC-Autonomy/orca_decision/src/wrench_adapter.cpp) 的 `force.z = heave` 是唯一沒乘係數的軸。目前所有 BT 節點都未設定 heave，故恆為 0；但一旦有人設定，它會**直接對抗深度 PID**，且兩者都在 wrench bus 上靜默相加。
 3. **機械臂通道整條斷開。** JETSON 發布 `/orca/decision/arm`(Int32) 與 `/orca/decision/hand`(Bool)，`decision.launch.py` 未 remap 這兩個，本 repo 也無任何訂閱者。本 repo GUI 用的是完全不同的名字 `actuators/electromagnet/enabled`。
 4. **無回饋回 JETSON。** JETSON 設定 desired_depth 但從不知道實際深度。
 5. **兩個獨立的 IMU 來源。** JETSON 的 `orca_decision` 訂閱 `/orca/imu/data`（飛控 / MAVROS），本 repo 的 `imu_to_orientation_node` 訂閱 `sensors/imu`（STM32）。合併到同一塊板子後，同一台載具上兩個 IMU 各餵各的消費者，彼此不知道對方存在。**若採納 3.2 的 yaw PID 建議，必須先決定 yaw 的權威來源是哪一個。**
@@ -373,7 +373,7 @@ STM32 IMU 還是飛控 IMU（見 §3.6 第 5 點）。這是唯一新增控制�
 
    採 Fast DDS + UDPv4 的理由：已用三個 container 實測驗證通過；改動只有一個環境變數；
    Isaac 容器的重流量是 composable node 內的 NITROS 零拷貝，跨 process 只有極小的
-   Wrench 訊息，RMW 選擇對感知效能影響有限。設定收斂在 `SAUVC-RPI/.env`，
+   Wrench 訊息，RMW 選擇對感知效能影響有限。設定收斂在 `SAUVC-Control/.env`，
    併入 super-repo 後上移一層由單一 `--env-file` 餵給所有堆疊。
 
 2. **repo 命名：保留 `SAUVC-` 前綴。**

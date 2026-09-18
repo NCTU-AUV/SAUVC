@@ -2,7 +2,7 @@
 
 > 日期：2026-08-03
 > 環境：x86_64 開發機（20 core / 30 GB RAM / NVIDIA GPU），非 Jetson
-> 範圍：SAUVC-Simulation（Gazebo Fortress）＋ SAUVC-RPI（控制堆疊）＋ SAUVC-JETSON（`orca_decision` BT）三個容器同時運行
+> 範圍：SAUVC-Simulation（Gazebo Fortress）＋ SAUVC-Control（控制堆疊）＋ SAUVC-Autonomy（`orca_decision` BT）三個容器同時運行
 
 本文件記錄**實際跑起來**觀測到的行為，與 [REFACTOR_PLAN.md](REFACTOR_PLAN.md) 的靜態分析互補。所有結論都附實測數據。
 
@@ -39,7 +39,7 @@
 
 | 容器 | `/dev/shm` | `FASTDDS_BUILTIN_TRANSPORTS` |
 |---|---|---|
-| SAUVC-RPI | compose 掛了 `/dev:/dev`，**等於 host 的 `/dev/shm`** | 未設定 → 預設 `SHM + UDPv4` |
+| SAUVC-Control | compose 掛了 `/dev:/dev`，**等於 host 的 `/dev/shm`** | 未設定 → 預設 `SHM + UDPv4` |
 | SAUVC-Simulation | container 自己的（64 MB） | `UDPv4`（compose 已設定） |
 
 Fast DDS 預設會宣告 SHM locator。兩邊 SHM 命名空間不一致時，participant 互相 match 得到、資料卻走不通，且**不會報錯**。
@@ -136,13 +136,13 @@ decision_node 實測輸出 `torque.z = 0.6 N·m`（`k_yaw 0.3 × yaw 2.0`），�
 
 ### 3.1 容器不是自給自足的——`make init` 裝的東西一 recreate 就沒了
 
-**✅ 已修**：SAUVC-RPI 與 SAUVC-Simulation 的相依都改為裝進映像。
+**✅ 已修**：SAUVC-Control 與 SAUVC-Simulation 的相依都改為裝進映像。
 
 `SAUVC-Simulation` 的 `bringup/package.xml` 依賴 `ros_gz_sim`，但 `Dockerfile` 只裝了 `ros-humble-ros-gz-bridge`。`ros_gz_sim` 是 `make init` 執行 `rosdep install` 時裝進**執行中的容器**的，不在映像裡。
 
 實測：`docker compose down` 後重建容器 → `ros2 pkg prefix ros_gz_sim` 回報 `Package not found`，`make launch` 直接失敗。
 
-同樣的模式在 SAUVC-RPI 也存在（`init` target 跑 `rosdep install`）。這代表「映像 build 成功」不等於「系統能跑」，也代表 CI／新成員上機必然踩坑。
+同樣的模式在 SAUVC-Control 也存在（`init` target 跑 `rosdep install`）。這代表「映像 build 成功」不等於「系統能跑」，也代表 CI／新成員上機必然踩坑。
 
 **修法**：所有 rosdep 依賴移進 Dockerfile。
 
@@ -191,7 +191,7 @@ where CMakeCache.txt was created.
 從 bag 量到的實際發布率與設定值不符：`publish_rate` 設 30.0，`control/wrench_command`
 實測 197 秒內 9,989 則。
 
-原因在 [wrench_sum_node.py:103](../SAUVC-RPI/rpi_ros2_ws/src/wrench_sum/wrench_sum/wrench_sum_node.py)：
+原因在 [wrench_sum_node.py:103](../SAUVC-Control/rpi_ros2_ws/src/wrench_sum/wrench_sum/wrench_sum_node.py)：
 `listener_callback` 收到**任何**來源的訊息就直接呼叫一次 `publish_sum()`，同時
 30 Hz 的 timer 也在呼叫。實際輸出率是「timer 頻率 ＋ 所有輸入來源頻率總和」。
 
@@ -213,9 +213,9 @@ where CMakeCache.txt was created.
 
 | 項目 | 大小 |
 |---|---|
-| `SAUVC-JETSON/model/`（5 個 `.onnx`） | 214 MB |
+| `SAUVC-Autonomy/model/`（5 個 `.onnx`） | 214 MB |
 | 其中未被任何 config 引用 | `best_conti.onnx`、`best_pretrain.onnx` = 86 MB |
-| `SAUVC-JETSON/.git` | 310 MB |
+| `SAUVC-Autonomy/.git` | 310 MB |
 
 `.onnx` 直接 commit 進 git，每次 clone 都要拉 310 MB。建議改 Git LFS 或 GitHub Release artifact + 啟動時下載。
 
@@ -232,7 +232,7 @@ docker exec -d <sim> bash -lc 'source install/setup.bash && \
   ros2 launch bringup orca_ros_gz_bridge_launch.py namespace:=orca_auv headless:=true'
 
 # 2) 控制堆疊（注意 FASTDDS_BUILTIN_TRANSPORTS）
-cd SAUVC-RPI && docker compose up -d --no-build
+cd SAUVC-Control && docker compose up -d --no-build
 docker exec <rpi> bash -lc 'cd rpi_ros2_ws && rm -rf build install log && colcon build --symlink-install'
 docker exec -d <rpi> bash -lc 'export FASTDDS_BUILTIN_TRANSPORTS=UDPv4 && \
   ros2 launch src/launch/simulation_control.launch.py namespace:=orca_auv'
@@ -240,7 +240,7 @@ docker exec -d <rpi> bash -lc 'export FASTDDS_BUILTIN_TRANSPORTS=UDPv4 && \
 # 3) 決策層
 docker run -d --name jetson --network host --gpus all \
   -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
-  -v $PWD/SAUVC-JETSON:/workspaces/isaac_ros-dev/src \
+  -v $PWD/SAUVC-Autonomy:/workspaces/isaac_ros-dev/src \
   -w /workspaces/isaac_ros-dev isaac_ros_dev-x86_64:latest sleep infinity
 docker exec jetson bash -lc 'colcon build --packages-up-to orca_decision'
 docker exec -d jetson bash -lc 'cd src/orca_decision && ros2 launch orca_decision decision.launch.py'

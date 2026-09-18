@@ -132,9 +132,9 @@ build_images:
 	$(COMPOSE) --profile sim build control sim
 
 # Isaac 映像請優先用 pull，不要在 Jetson 上 build。理由見
-# SAUVC-JETSON/isaac_ros_common/scripts/orca_registry.sh 的說明。
+# SAUVC-Autonomy/isaac_ros_common/scripts/orca_registry.sh 的說明。
 pull_autonomy:
-	SAUVC-JETSON/isaac_ros_common/scripts/orca_registry.sh pull
+	SAUVC-Autonomy/isaac_ros_common/scripts/orca_registry.sh pull
 
 # --- workspace 建置 ---------------------------------------------------------
 

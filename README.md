@@ -26,13 +26,18 @@ NCTU-AUV 參加 SAUVC（Singapore AUV Challenge）的水下自主載具。
 
 | Submodule | 職責 |
 |---|---|
-| [SAUVC-RPI](SAUVC-RPI/) | 控制：PID、wrench 匯流排、推力分配、系統模式與安全、Web GUI |
-| [SAUVC-JETSON](SAUVC-JETSON/) | 感知與決策：YOLOv8 + 深度估計 + BehaviorTree |
+| [SAUVC-Control](SAUVC-Control/) | 控制：PID、wrench 匯流排、推力分配、系統模式與安全、Web GUI |
+| [SAUVC-Autonomy](SAUVC-Autonomy/) | 感知與決策：YOLOv8 + 深度估計 + BehaviorTree |
 | [SAUVC-Simulation](SAUVC-Simulation/) | Gazebo Fortress 場景與 ROS 橋接 |
-| SAUVC-STM32 | 韌體（在 SAUVC-RPI 底下） |
+| SAUVC-STM32 | 韌體（在 SAUVC-Control 底下） |
 
-> 名稱已不精確：`SAUVC-RPI` 裡沒有樹莓派，兩套堆疊都跑在同一塊 Orin NX 的兩個容器裡。
-> 預計更名為 `SAUVC-Control` / `SAUVC-Autonomy`，見 [scripts/rename_repos.sh](scripts/rename_repos.sh)。
+> 兩套堆疊都跑在同一塊 Orin NX 的兩個容器裡，樹莓派已經退場。原本以硬體命名的
+> `SAUVC-RPI` / `SAUVC-JETSON` 已改為職責命名 `SAUVC-Control` / `SAUVC-Autonomy`；
+> GitHub 保留舊名重導，但既有 clone 請執行：
+>
+> ```bash
+> git submodule sync --recursive && git submodule update --init --recursive
+> ```
 
 ---
 
@@ -160,16 +165,16 @@ make down      # 停掉容器
 | 位置 | 內容 |
 |---|---|
 | [`.env`](.env) | namespace、DDS、裝置路徑、DISPLAY |
-| [SAUVC-RPI/.../orca_bringup/config/](SAUVC-RPI/rpi_ros2_ws/src/orca_bringup/config/) | PID 增益、推進器幾何、bag 錄製 |
-| [SAUVC-JETSON/.../orca_perception/config/](SAUVC-JETSON/perception_pipeline/orca_perception/config/) | 感知管線（實機 / 模擬兩份） |
-| [SAUVC-JETSON/orca_decision/config/](SAUVC-JETSON/orca_decision/config/) | 行為樹與決策參數 |
+| [SAUVC-Control/.../orca_bringup/config/](SAUVC-Control/rpi_ros2_ws/src/orca_bringup/config/) | PID 增益、推進器幾何、bag 錄製 |
+| [SAUVC-Autonomy/.../orca_perception/config/](SAUVC-Autonomy/perception_pipeline/orca_perception/config/) | 感知管線（實機 / 模擬兩份） |
+| [SAUVC-Autonomy/orca_decision/config/](SAUVC-Autonomy/orca_decision/config/) | 行為樹與決策參數 |
 
 ---
 
 ## Bag 錄製
 
 隨啟動自動開始，落在 host 的 `bags/`，格式 mcap、每 120 秒切一段。
-錄什麼由 [record_topics.yaml](SAUVC-RPI/rpi_ros2_ws/src/orca_bringup/config/record_topics.yaml) 決定
+錄什麼由 [record_topics.yaml](SAUVC-Control/rpi_ros2_ws/src/orca_bringup/config/record_topics.yaml) 決定
 （感測輸入 → 目標 → PID → wrench 匯流排 → 推力分配 → 推進器指令；影像預設不錄）。
 
 載具是靠 kill switch 直接斷電的，所以 bag 目錄通常沒有 `metadata.yaml`，
@@ -190,5 +195,5 @@ ros2 bag reindex <bag_dir> -s mcap
 | [docs/SIM_VISUAL_FIDELITY.md](docs/SIM_VISUAL_FIDELITY.md) | 場景依 2026 rulebook 改造、水下成像模型、量化驗證 |
 | [docs/SIMULATION_FINDINGS.md](docs/SIMULATION_FINDINGS.md) | 三容器全鏈路實測報告 |
 | [docs/REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) | 重構計畫與決策紀錄 |
-| [SAUVC-RPI/docs/ARCHITECTURE.html](SAUVC-RPI/docs/ARCHITECTURE.html) | 控制堆疊架構 |
-| [SAUVC-JETSON/ARCHITECTURE.html](SAUVC-JETSON/ARCHITECTURE.html) | 感知決策堆疊架構 |
+| [SAUVC-Control/docs/ARCHITECTURE.html](SAUVC-Control/docs/ARCHITECTURE.html) | 控制堆疊架構 |
+| [SAUVC-Autonomy/ARCHITECTURE.html](SAUVC-Autonomy/ARCHITECTURE.html) | 感知決策堆疊架構 |

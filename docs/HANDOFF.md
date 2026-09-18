@@ -4,7 +4,7 @@
 「重構後全專案審查 + 修正」留下的狀態、驗證方法與踩過的坑。
 
 讀完這份之後最該先看的兩份是 `docs/SIMULATION_FINDINGS.md`（更早一輪的模擬
-問題紀錄）與 `SAUVC-RPI/docs/ARCHITECTURE.html`（控制堆疊架構）。
+問題紀錄）與 `SAUVC-Control/docs/ARCHITECTURE.html`（控制堆疊架構）。
 
 ---
 
@@ -14,8 +14,8 @@
 
 | 順序 | PR | 內容 |
 |---|---|---|
-| 1 | [SAUVC-JETSON#5](https://github.com/NCTU-AUV/SAUVC-JETSON/pull/5) | 感知管線接進啟動流程、IMU 話題與重力座標、gate 深度與接近邏輯 |
-| 1 | [SAUVC-RPI#116](https://github.com/NCTU-AUV/SAUVC-RPI/pull/116) | 模式請求回絕、FAULT 鎖存、深度力箝制 |
+| 1 | [SAUVC-Autonomy#5](https://github.com/NCTU-AUV/SAUVC-Autonomy/pull/5) | 感知管線接進啟動流程、IMU 話題與重力座標、gate 深度與接近邏輯 |
+| 1 | [SAUVC-Control#116](https://github.com/NCTU-AUV/SAUVC-Control/pull/116) | 模式請求回絕、FAULT 鎖存、深度力箝制 |
 | 1 | [SAUVC-Simulation#25](https://github.com/NCTU-AUV/SAUVC-Simulation/pull/25) | IMU 安裝姿態、資料集標註四項、資格賽 profile |
 | 2 | [SAUVC#2](https://github.com/NCTU-AUV/SAUVC/pull/2) | Makefile 三項 + 三個子模組指標 |
 
@@ -43,8 +43,8 @@ request.`），任何直接 push 到 main 都會被拒絕，不要浪費時間�
 三個子模組 + 一個整合層，全部跑在 Docker 容器裡，由超級倉的 `Makefile` 驅動。
 
 ```text
-SAUVC-JETSON     自主：YOLOv8(TensorRT) 感知管線 + BehaviorTree 決策
-SAUVC-RPI        控制：深度 PID、wrench 匯流排、推力分配、系統狀態機、Web GUI
+SAUVC-Autonomy     自主：YOLOv8(TensorRT) 感知管線 + BehaviorTree 決策
+SAUVC-Control        控制：深度 PID、wrench 匯流排、推力分配、系統狀態機、Web GUI
 SAUVC-Simulation 模擬：Gazebo Fortress 世界、水下相機渲染、場地生成、資料集產生
 SAUVC (超級倉)    整合：Makefile、docker-compose、跨堆疊設定
 ```
@@ -97,7 +97,7 @@ Gazebo --sensors/imu 100Hz----------------------> decision_node (world model)
 | 偵測座標 `cx`/`cy` | **640×640 張量空間**，中心 (320, 320) | 不是 640×480，中心不是 (320,240) |
 
 控制端對「往下為正」的權威來源是
-`SAUVC-RPI/rpi_ros2_ws/src/depth_control/depth_control/output_sink_force_to_output_wrench_node.py`
+`SAUVC-Control/rpi_ros2_ws/src/depth_control/depth_control/output_sink_force_to_output_wrench_node.py`
 的 `world_frame_sink_direction`，其向量部是 `(0, 0, 1)`。
 
 ### 陷阱：角度繞回會騙過單點量測
@@ -261,7 +261,7 @@ Gazebo --sensors/imu 100Hz----------------------> decision_node (world model)
 
 ### D. 改了沒有作用的設定
 
-- **(27)** `ORCA_STM32_PORT` 沒有列在 `SAUVC-RPI/docker-compose.yml` 的
+- **(27)** `ORCA_STM32_PORT` 沒有列在 `SAUVC-Control/docker-compose.yml` 的
   `environment:`，容器內永遠讀不到，一律退回 `/dev/ttyUSB0`。
 - **(28)** 模擬的 `namespace:=` 被 `model.sdf` 裡寫死的 `orca_auv` 架空（5 處
   感測器 + 8 個推進器）。改 `ORCA_NAMESPACE` 會讓所有感測器斷線且不報錯。
@@ -294,7 +294,7 @@ Gazebo --sensors/imu 100Hz----------------------> decision_node (world model)
   `trees.xml` 上的 `timeout="15.0"` 是死設定。
 - **(37)** `depth_perception_node.py` 的穩定性判定三個 deque 沒有時間對齊
   （命中每幀記錄，位置與信心值只在有偵測時記錄）。
-- **(38)** `SAUVC-RPI/Makefile:298` 呼叫已被刪除的 `wrench_sum.launch.py`。
+- **(38)** `SAUVC-Control/Makefile:298` 呼叫已被刪除的 `wrench_sum.launch.py`。
 - **(39)** `record_topics.yaml` 仍記錄已移入 legacy 的 optical-flow 話題，配合
   `--include-unpublished-topics` 會讓每個 bag 多出永久空白項目。
 
@@ -325,7 +325,7 @@ Gazebo --sensors/imu 100Hz----------------------> decision_node (world model)
   任何設了 `"default-runtime": "nvidia"` 的機器上會。
 - 三個映像都已在本機：`dianyueguo/orca-auv-rpi-ros2-image`、
   `isaac_ros_dev-x86_64`、`orca-auv-gazebo-simulation-image`。
-- 模型檔在 `SAUVC-JETSON/model/`：`finals.onnx`(7類)、`qualification.onnx`(1類)、
+- 模型檔在 `SAUVC-Autonomy/model/`：`finals.onnx`(7類)、`qualification.onnx`(1類)、
   `sim_best.onnx`、`best_conti.onnx`、`best_pretrain.onnx`。
 
 ### 完整啟動
@@ -438,7 +438,7 @@ gate**（使用者目視確認）。症狀是行為樹零星鎖定又立刻丟�
 ## 8. 這一輪沒有做的事
 
 - **實機測試**：所有驗收都在模擬中完成，沒有任何一項在真實載具上跑過。
-  `SAUVC-RPI#116` 的三項安全修正尤其應該在下水前於實機確認。
+  `SAUVC-Control#116` 的三項安全修正尤其應該在下水前於實機確認。
 - **`micro_ros_agent` 的節點命名**：`bringup.launch.py` 現在會傳
   `name='micro_ros_agent'`，`launch_ros` 因此會附加 `--ros-args -r __node:=`
   到 agent 的命令列，而舊版沒有。這條路徑在模擬中不會執行，值得在實機
