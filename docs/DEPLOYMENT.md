@@ -25,8 +25,8 @@ Isaac 映像不要在 Jetson 上 build ——用 x86 機器建好推 registry：
 
 ```shell
 # 開發機
-SAUVC-JETSON/isaac_ros_common/scripts/orca_registry.sh build --arm64
-SAUVC-JETSON/isaac_ros_common/scripts/orca_registry.sh push
+SAUVC-Autonomy/isaac_ros_common/scripts/orca_registry.sh build --arm64
+SAUVC-Autonomy/isaac_ros_common/scripts/orca_registry.sh push
 
 # Jetson
 make pull_autonomy
