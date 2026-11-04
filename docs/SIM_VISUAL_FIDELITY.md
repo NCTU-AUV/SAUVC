@@ -1,7 +1,7 @@
 # 模擬場景視覺保真度改造
 
 > 日期：2026-08-03
-> 目標：讓 SAUVC-Simulation 的場景與道具貼近 SAUVC 2026 真實比賽，使 **SAUVC-JETSON 現有的 `finals.onnx`（以真實水下影像訓練）不必重訓就能在模擬中穩定辨識**
+> 目標：讓 SAUVC-Simulation 的場景與道具貼近 SAUVC 2026 真實比賽，使 **SAUVC-Autonomy 現有的 `finals.onnx`（以真實水下影像訓練）不必重訓就能在模擬中穩定辨識**
 > 依據：[SAUVC 2026 rulebook v6.1.0](https://github.com/sauvc/rulebook) 原始碼與 `img/` 官方圖檔（副本見 [sim-visual/reference/](sim-visual/reference/)）
 
 ---
@@ -162,7 +162,7 @@ docker compose exec sim bash -lc '
   ros2 run bringup generate_dataset.py --out /root/dataset --count 500 --randomize-water'
 
 # 離線量測（在有 onnxruntime 的環境）
-python3 yolo_probe.py SAUVC-JETSON/model/finals.onnx 'captures/after_*.png'
+python3 yolo_probe.py SAUVC-Autonomy/model/finals.onnx 'captures/after_*.png'
 ```
 
 `make sim` 的可用參數：`ARENA=finals|qualification`、`SEED=<int>`、`HEADLESS=true`、

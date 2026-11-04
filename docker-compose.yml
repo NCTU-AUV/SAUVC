@@ -3,8 +3,8 @@
 # =============================================================================
 # 一次拉起載具上的兩個堆疊：
 #
-#   control   —— 載具控制（SAUVC-RPI）：PID、wrench 匯流排、推力分配
-#   autonomy  —— 感知與決策（SAUVC-JETSON）：YOLOv8 + BehaviorTree
+#   control   —— 載具控制（SAUVC-Control）：PID、wrench 匯流排、推力分配
+#   autonomy  —— 感知與決策（SAUVC-Autonomy）：YOLOv8 + BehaviorTree
 #
 # 兩者跑在同一塊 Jetson Orin NX 上但維持獨立容器，理由：base image 無法調和
 # （CUDA devel + Isaac ROS 全家桶 vs 乾淨的 ros:humble）；改動頻率差距極大
@@ -39,7 +39,7 @@ services:
     container_name: orca-control
     image: ${ORCA_CONTROL_IMAGE:-dianyueguo/orca-auv-rpi-ros2-image:latest}
     build:
-      context: ./SAUVC-RPI
+      context: ./SAUVC-Control
       dockerfile: Dockerfile
     network_mode: host
     privileged: true          # 存取 STM32 序列埠與 ST-Link
@@ -53,7 +53,7 @@ services:
       XAUTHORITY: ${XAUTHORITY:-/tmp/.Xauthority}
     volumes:
       - /dev:/dev
-      - ./SAUVC-RPI/rpi_ros2_ws:/root/rpi_ros2_ws
+      - ./SAUVC-Control/rpi_ros2_ws:/root/rpi_ros2_ws
       # build / install / log 用 named volume，不要落在 bind mount 裡：
       # host 上跑過的 colcon build 會留下寫死 host 路徑的 CMakeCache，
       # 讓容器內 build 直接失敗，而且因為這些目錄被 gitignore，沒人查得出原因。
@@ -69,10 +69,10 @@ services:
       # Web GUI 的 gui_node 同樣反序列化不了 DecisionStatus，那正是任務狀態得
       # 另外走一條 JSON 鏡像 topic 的原因。
       #
-      # 掛的是 SAUVC-JETSON 那份唯一的定義，不是複製一份 —— 訊息一旦有兩份
+      # 掛的是 SAUVC-Autonomy 那份唯一的定義，不是複製一份 —— 訊息一旦有兩份
       # 定義就會漂移，而漂移的症狀是 CDR 解出亂數，不是編譯錯誤。
-      - ./SAUVC-JETSON/orca_interface:/root/rpi_ros2_ws/src/orca_interface:ro
-      - ./SAUVC-RPI/SAUVC-STM32/build:/root/rpi_ros2_ws/stm32_binary
+      - ./SAUVC-Autonomy/orca_interface:/root/rpi_ros2_ws/src/orca_interface:ro
+      - ./SAUVC-Control/SAUVC-STM32/build:/root/rpi_ros2_ws/stm32_binary
       - ${ORCA_BAG_DIR:-./bags}:/root/bags
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     working_dir: /root
@@ -100,7 +100,7 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: all
     volumes:
       - /dev:/dev
-      - ./SAUVC-JETSON:/workspaces/isaac_ros-dev/src
+      - ./SAUVC-Autonomy:/workspaces/isaac_ros-dev/src
       - autonomy_build:/workspaces/isaac_ros-dev/build
       - autonomy_install:/workspaces/isaac_ros-dev/install
       - autonomy_log:/workspaces/isaac_ros-dev/log
